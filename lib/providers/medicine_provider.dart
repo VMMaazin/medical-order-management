@@ -75,3 +75,15 @@ final medicineActiveVariantCountProvider =
     StreamProvider.autoDispose.family<int, String>((ref, medicineId) {
   return ref.watch(medicineServiceProvider).watchActiveVariantCount(medicineId);
 });
+
+final activeMedicinesStreamProvider =
+    StreamProvider.autoDispose<List<Medicine>>((ref) {
+  final service = ref.watch(medicineServiceProvider);
+  return service.watchMedicines(includeInactive: false);
+});
+
+final activeMedicineVariantsProvider = StreamProvider.autoDispose
+    .family<List<MedicineVariant>, String>((ref, medicineId) {
+  final service = ref.watch(medicineServiceProvider);
+  return service.watchVariants(medicineId, includeInactive: false);
+});

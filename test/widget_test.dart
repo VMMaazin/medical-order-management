@@ -9,6 +9,7 @@ import 'package:medical_order_management/models/medical_rep.dart';
 import 'package:medical_order_management/models/medicine.dart';
 import 'package:medical_order_management/models/medicine_variant.dart';
 import 'package:medical_order_management/models/order_draft.dart';
+import 'package:medical_order_management/models/order_draft_item.dart';
 import 'package:medical_order_management/providers/auth_provider.dart';
 import 'package:medical_order_management/providers/chemist_provider.dart';
 import 'package:medical_order_management/providers/doctor_provider.dart';
@@ -36,6 +37,7 @@ import 'package:medical_order_management/screens/auth/auth_wrapper.dart';
 import 'package:medical_order_management/screens/auth/login_screen.dart';
 import 'package:medical_order_management/screens/representative/order/add_medicines_screen.dart';
 import 'package:medical_order_management/screens/representative/order/create_order_screen.dart';
+import 'package:medical_order_management/screens/representative/order/review_order_screen.dart';
 import 'package:medical_order_management/screens/representative/representative_dashboard_screen.dart';
 
 void main() {
@@ -1549,22 +1551,535 @@ void main() {
       await tester.tap(find.text('Continue'));
       await tester.pumpAndSettle();
 
-      // Navigated to AddMedicinesScreen placeholder
+      // Navigated to AddMedicinesScreen
       expect(find.byType(AddMedicinesScreen), findsOneWidget);
       expect(find.text('Add Medicines'), findsOneWidget);
-      expect(find.text('Step 2 of 2: Medicines Selection'), findsOneWidget);
-      expect(
-        find.text('Medicine selection will be implemented in the next stage.'),
-        findsOneWidget,
+
+      // Verified passed forward data in order context bar
+      expect(find.text('Dr. Rajesh Kumar'), findsWidgets);
+      expect(find.text('Apollo Pharmacy'), findsWidgets);
+      expect(find.text('Medicines Catalog'), findsOneWidget);
+      expect(find.text('Cart (0 items)'), findsOneWidget);
+    });
+  });
+
+  group('Medicine, Variant, Quantity, and Cart Flow Tests', () {
+    const testDoc = Doctor(
+      id: 'DOC_1',
+      name: 'Dr. Rajesh Kumar',
+      specialization: 'Cardiologist',
+      phone: '+919876543210',
+      active: true,
+    );
+
+    const testChemist = Chemist(
+      id: 'CHM_1',
+      name: 'Apollo Pharmacy',
+      phone: '+919876543299',
+      address: 'MG Road, Bangalore',
+      active: true,
+    );
+
+    const activeMed1 = Medicine(
+      id: 'MED_1',
+      name: 'Azithromycin',
+      brand: 'AziBest',
+      composition: 'Azithromycin 250mg/500mg',
+      category: 'Antibiotic',
+      active: true,
+    );
+
+    const activeMed2 = Medicine(
+      id: 'MED_2',
+      name: 'Paracetamol',
+      brand: 'Calpol',
+      composition: 'Paracetamol 650mg',
+      category: 'Analgesic',
+      active: true,
+    );
+
+    const inactiveMed = Medicine(
+      id: 'MED_INACTIVE',
+      name: 'Banned Drug',
+      brand: 'OldBrand',
+      composition: 'Discontinued Chem',
+      category: 'Other',
+      active: false,
+    );
+
+    const activeVariant1 = MedicineVariant(
+      id: 'VAR_1',
+      medicineId: 'MED_1',
+      form: 'Tablet',
+      strength: '250 mg',
+      packSize: '10 tablets',
+      mrp: 80.0,
+      supplierPrice: 60.0,
+      active: true,
+    );
+
+    const activeVariant2 = MedicineVariant(
+      id: 'VAR_2',
+      medicineId: 'MED_1',
+      form: 'Tablet',
+      strength: '500 mg',
+      packSize: '10 tablets',
+      mrp: 120.0,
+      supplierPrice: 90.0,
+      active: true,
+    );
+
+    const inactiveVariant = MedicineVariant(
+      id: 'VAR_INACTIVE',
+      medicineId: 'MED_1',
+      form: 'Tablet',
+      strength: '100 mg',
+      packSize: '5 tablets',
+      mrp: 40.0,
+      supplierPrice: 30.0,
+      active: false,
+    );
+
+    test('OrderDraftItem model calculates itemTotal and copyWith correctly', () {
+      const item = OrderDraftItem(
+        medicineId: 'MED_1',
+        medicineName: 'Azithromycin',
+        brand: 'AziBest',
+        composition: 'Azithromycin',
+        variantId: 'VAR_1',
+        form: 'Tablet',
+        strength: '250 mg',
+        packSize: '10 tablets',
+        mrp: 80.0,
+        supplierPrice: 60.0,
+        quantity: 10,
       );
 
-      // Verified passed forward data
-      expect(find.text('Dr. Rajesh Kumar'), findsOneWidget);
-      expect(find.text('Cardiologist'), findsOneWidget);
-      expect(find.text('Phone: +919876543210'), findsOneWidget);
-      expect(find.text('Apollo Pharmacy'), findsOneWidget);
-      expect(find.text('MG Road, Bangalore'), findsOneWidget);
-      expect(find.text('Phone: +919876543299'), findsOneWidget);
+      expect(item.itemTotal, 600.0);
+      final updated = item.copyWith(quantity: 15);
+      expect(updated.quantity, 15);
+      expect(updated.itemTotal, 900.0);
+    });
+
+    test('OrderDraft aggregates totalItems, totalQuantity, and totalAmount correctly', () {
+      const item1 = OrderDraftItem(
+        medicineId: 'MED_1',
+        medicineName: 'Azithromycin',
+        brand: 'AziBest',
+        composition: 'Azithromycin',
+        variantId: 'VAR_1',
+        form: 'Tablet',
+        strength: '250 mg',
+        packSize: '10 tablets',
+        mrp: 80.0,
+        supplierPrice: 60.0,
+        quantity: 10,
+      );
+
+      const item2 = OrderDraftItem(
+        medicineId: 'MED_1',
+        medicineName: 'Azithromycin',
+        brand: 'AziBest',
+        composition: 'Azithromycin',
+        variantId: 'VAR_2',
+        form: 'Tablet',
+        strength: '500 mg',
+        packSize: '10 tablets',
+        mrp: 120.0,
+        supplierPrice: 90.0,
+        quantity: 5,
+      );
+
+      final draft = OrderDraft(
+        doctor: testDoc,
+        chemist: testChemist,
+        items: [item1, item2],
+      );
+
+      expect(draft.totalItems, 2);
+      expect(draft.totalQuantity, 15);
+      expect(draft.totalAmount, 1050.0);
+      expect(draft.isNotEmpty, isTrue);
+      expect(draft.isEmpty, isFalse);
+    });
+
+    testWidgets('AddMedicinesScreen displays active medicines and excludes inactive medicines',
+        (WidgetTester tester) async {
+      final draft = OrderDraft(doctor: testDoc, chemist: testChemist);
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            activeMedicinesStreamProvider.overrideWith(
+              (ref) => Stream.value([activeMed1, activeMed2, inactiveMed]),
+            ),
+          ],
+          child: MaterialApp(
+            home: AddMedicinesScreen(orderDraft: draft),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      expect(find.text('Azithromycin'), findsOneWidget);
+      expect(find.text('Paracetamol'), findsOneWidget);
+      expect(find.text('Banned Drug'), findsNothing);
+    });
+
+    testWidgets('Medicine search filters by name, brand, composition, category',
+        (WidgetTester tester) async {
+      final draft = OrderDraft(doctor: testDoc, chemist: testChemist);
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            activeMedicinesStreamProvider.overrideWith(
+              (ref) => Stream.value([activeMed1, activeMed2]),
+            ),
+          ],
+          child: MaterialApp(
+            home: AddMedicinesScreen(orderDraft: draft),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      // Search by composition
+      await tester.enterText(
+        find.widgetWithText(TextField, 'Search medicines...'),
+        '650mg',
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Paracetamol'), findsOneWidget);
+      expect(find.text('Azithromycin'), findsNothing);
+
+      // Search with no results
+      await tester.enterText(
+        find.widgetWithText(TextField, 'Search medicines...'),
+        'Nonexistent',
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('No medicines found.'), findsOneWidget);
+    });
+
+    testWidgets('Variant modal displays active variants and excludes inactive variants',
+        (WidgetTester tester) async {
+      final draft = OrderDraft(doctor: testDoc, chemist: testChemist);
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            activeMedicinesStreamProvider.overrideWith(
+              (ref) => Stream.value([activeMed1]),
+            ),
+            activeMedicineVariantsProvider('MED_1').overrideWith(
+              (ref) => Stream.value([activeVariant1, activeVariant2, inactiveVariant]),
+            ),
+          ],
+          child: MaterialApp(
+            home: AddMedicinesScreen(orderDraft: draft),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      // Tap on medicine to open variant modal
+      await tester.tap(find.text('Azithromycin'));
+      await tester.pumpAndSettle();
+
+      // Active variants displayed
+      expect(find.text('Tablet • 250 mg • 10 tablets'), findsOneWidget);
+      expect(find.text('Tablet • 500 mg • 10 tablets'), findsOneWidget);
+
+      // Inactive variant NOT displayed
+      expect(find.text('Tablet • 100 mg • 5 tablets'), findsNothing);
+
+      // Prices displayed
+      expect(find.text('MRP ₹80.00'), findsOneWidget);
+      expect(find.text('Supplier ₹60.00'), findsOneWidget);
+      expect(find.text('MRP ₹120.00'), findsOneWidget);
+      expect(find.text('Supplier ₹90.00'), findsOneWidget);
+    });
+
+    testWidgets('Add to cart, increase quantity on exact variant, and separate different variants',
+        (WidgetTester tester) async {
+      final draft = OrderDraft(doctor: testDoc, chemist: testChemist);
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            activeMedicinesStreamProvider.overrideWith(
+              (ref) => Stream.value([activeMed1]),
+            ),
+            activeMedicineVariantsProvider('MED_1').overrideWith(
+              (ref) => Stream.value([activeVariant1, activeVariant2]),
+            ),
+          ],
+          child: MaterialApp(
+            home: AddMedicinesScreen(orderDraft: draft),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      // Open variant modal
+      await tester.tap(find.text('Azithromycin'));
+      await tester.pumpAndSettle();
+
+      // Select Variant 1 (250 mg)
+      await tester.tap(find.text('Tablet • 250 mg • 10 tablets'));
+      await tester.pumpAndSettle();
+
+      // Set quantity to 10
+      await tester.enterText(
+        find.descendant(
+          of: find.byType(Dialog).evaluate().isEmpty
+              ? find.byType(BottomSheet)
+              : find.byType(Dialog),
+          matching: find.byType(TextField),
+        ),
+        '10',
+      );
+      await tester.pumpAndSettle();
+
+      // Tap Add to Cart
+      await tester.tap(find.text('Add to Cart'));
+      await tester.pumpAndSettle();
+
+      // Cart now has 1 item with quantity 10, total 600.00
+      expect(find.text('Cart (1 items)'), findsOneWidget);
+      expect(find.text('10 units'), findsOneWidget);
+      expect(find.text('₹600.00'), findsWidgets);
+
+      // Add the exact same variant again with quantity 5
+      await tester.tap(find.widgetWithText(OutlinedButton, 'Variants').first);
+      await tester.pumpAndSettle();
+
+      await tester.tap(
+        find.descendant(
+          of: find.byType(BottomSheet),
+          matching: find.text('Tablet • 250 mg • 10 tablets'),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.enterText(
+        find.descendant(
+          of: find.byType(BottomSheet),
+          matching: find.byType(TextField),
+        ),
+        '5',
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Add to Cart'));
+      await tester.pumpAndSettle();
+
+      // Still 1 item line, but quantity increased to 15 (60 * 15 = 900.00)
+      expect(find.text('Cart (1 items)'), findsOneWidget);
+      expect(find.text('15 units'), findsOneWidget);
+      expect(find.text('₹900.00'), findsWidgets);
+
+      // Add a different variant (500 mg) with quantity 5
+      await tester.tap(find.widgetWithText(OutlinedButton, 'Variants').first);
+      await tester.pumpAndSettle();
+
+      await tester.tap(
+        find.descendant(
+          of: find.byType(BottomSheet),
+          matching: find.text('Tablet • 500 mg • 10 tablets'),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.enterText(
+        find.descendant(
+          of: find.byType(BottomSheet),
+          matching: find.byType(TextField),
+        ),
+        '5',
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Add to Cart'));
+      await tester.pumpAndSettle();
+
+      // Now 2 separate items in cart, total units = 20, total amount = 900 + 450 = 1350.00
+      expect(find.text('Cart (2 items)'), findsOneWidget);
+      expect(find.text('20 units'), findsOneWidget);
+      expect(find.text('₹1350.00'), findsOneWidget);
+    });
+
+    testWidgets('Inline quantity edit and item removal in cart',
+        (WidgetTester tester) async {
+      const item = OrderDraftItem(
+        medicineId: 'MED_1',
+        medicineName: 'Azithromycin',
+        brand: 'AziBest',
+        composition: 'Azithromycin',
+        variantId: 'VAR_1',
+        form: 'Tablet',
+        strength: '250 mg',
+        packSize: '10 tablets',
+        mrp: 80.0,
+        supplierPrice: 60.0,
+        quantity: 2,
+      );
+
+      final draft = OrderDraft(
+        doctor: testDoc,
+        chemist: testChemist,
+        items: [item],
+      );
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            activeMedicinesStreamProvider.overrideWith(
+              (ref) => Stream.value([activeMed1]),
+            ),
+          ],
+          child: MaterialApp(
+            home: AddMedicinesScreen(orderDraft: draft),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      expect(find.text('Cart (1 items)'), findsOneWidget);
+      expect(find.text('2 units'), findsOneWidget);
+      expect(find.text('₹120.00'), findsWidgets);
+
+      // Increment quantity using inline '+' button
+      final incButton = find.byIcon(Icons.add);
+      await tester.ensureVisible(incButton);
+      await tester.tap(incButton);
+      await tester.pumpAndSettle();
+
+      expect(find.text('3 units'), findsOneWidget);
+      expect(find.text('₹180.00'), findsWidgets);
+
+      // Decrement quantity using inline '-' button
+      final decButton = find.byIcon(Icons.remove);
+      await tester.ensureVisible(decButton);
+      await tester.tap(decButton);
+      await tester.pumpAndSettle();
+
+      expect(find.text('2 units'), findsOneWidget);
+      expect(find.text('₹120.00'), findsWidgets);
+
+      // Remove item using trash icon
+      final deleteButton = find.byIcon(Icons.delete_outline_rounded);
+      await tester.ensureVisible(deleteButton);
+      await tester.tap(deleteButton);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Cart is empty.'), findsOneWidget);
+      expect(find.text('Cart (0 items)'), findsOneWidget);
+    });
+
+    testWidgets('Empty cart validation when attempting to review order',
+        (WidgetTester tester) async {
+      final draft = OrderDraft(doctor: testDoc, chemist: testChemist);
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            activeMedicinesStreamProvider.overrideWith(
+              (ref) => Stream.value([activeMed1]),
+            ),
+          ],
+          child: MaterialApp(
+            home: AddMedicinesScreen(orderDraft: draft),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      // Tap Review Order on empty cart -> shows warning SnackBar
+      await tester.tap(find.text('Review Order'));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text('Add at least one medicine before reviewing the order.'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('ReviewOrderScreen displays Doctor, Chemist, cart items and total correctly',
+        (WidgetTester tester) async {
+      const item1 = OrderDraftItem(
+        medicineId: 'MED_1',
+        medicineName: 'Azithromycin',
+        brand: 'AziBest',
+        composition: 'Azithromycin 250mg',
+        variantId: 'VAR_1',
+        form: 'Tablet',
+        strength: '250 mg',
+        packSize: '10 tablets',
+        mrp: 80.0,
+        supplierPrice: 60.0,
+        quantity: 10,
+      );
+
+      const item2 = OrderDraftItem(
+        medicineId: 'MED_1',
+        medicineName: 'Azithromycin',
+        brand: 'AziBest',
+        composition: 'Azithromycin 500mg',
+        variantId: 'VAR_2',
+        form: 'Tablet',
+        strength: '500 mg',
+        packSize: '10 tablets',
+        mrp: 120.0,
+        supplierPrice: 90.0,
+        quantity: 5,
+      );
+
+      final draft = OrderDraft(
+        doctor: testDoc,
+        chemist: testChemist,
+        items: [item1, item2],
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: ReviewOrderScreen(orderDraft: draft),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      // Doctor & Chemist details
+      expect(find.text('Doctor: Dr. Rajesh Kumar'), findsOneWidget);
+      expect(find.text('Chemist: Apollo Pharmacy'), findsOneWidget);
+
+      // Cart Items
+      expect(find.text('Cart Items (2)'), findsOneWidget);
+      expect(find.text('15 units'), findsWidgets);
+      expect(find.text('₹600.00'), findsOneWidget);
+      expect(find.text('₹450.00'), findsOneWidget);
+      expect(find.text('₹1050.00'), findsOneWidget);
+
+      // Tapping Submit Order shows placeholder dialog (no Firestore writes)
+      await tester.ensureVisible(find.text('Submit Order'));
+      await tester.tap(find.text('Submit Order'));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text('Order submission will be implemented in the next stage.'),
+        findsOneWidget,
+      );
+      await tester.tap(find.text('OK'));
+      await tester.pumpAndSettle();
     });
   });
 }
