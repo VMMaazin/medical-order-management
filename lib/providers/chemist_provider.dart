@@ -59,3 +59,8 @@ final singleChemistProvider =
     StreamProvider.autoDispose.family<Chemist?, String>((ref, id) {
   return ref.watch(chemistServiceProvider).watchChemist(id);
 });
+
+final activeChemistsStreamProvider = StreamProvider.autoDispose<List<Chemist>>((ref) {
+  final service = ref.watch(chemistServiceProvider);
+  return service.watchChemists(includeInactive: false);
+});

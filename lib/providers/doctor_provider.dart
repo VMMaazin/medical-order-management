@@ -59,3 +59,8 @@ final singleDoctorProvider =
     StreamProvider.autoDispose.family<Doctor?, String>((ref, id) {
   return ref.watch(doctorServiceProvider).watchDoctor(id);
 });
+
+final activeDoctorsStreamProvider = StreamProvider.autoDispose<List<Doctor>>((ref) {
+  final service = ref.watch(doctorServiceProvider);
+  return service.watchDoctors(includeInactive: false);
+});

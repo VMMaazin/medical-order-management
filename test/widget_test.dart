@@ -8,6 +8,7 @@ import 'package:medical_order_management/models/doctor.dart';
 import 'package:medical_order_management/models/medical_rep.dart';
 import 'package:medical_order_management/models/medicine.dart';
 import 'package:medical_order_management/models/medicine_variant.dart';
+import 'package:medical_order_management/models/order_draft.dart';
 import 'package:medical_order_management/providers/auth_provider.dart';
 import 'package:medical_order_management/providers/chemist_provider.dart';
 import 'package:medical_order_management/providers/doctor_provider.dart';
@@ -33,6 +34,8 @@ import 'package:medical_order_management/screens/admin/medicine/medicines_screen
 import 'package:medical_order_management/screens/admin/placeholder_screen.dart';
 import 'package:medical_order_management/screens/auth/auth_wrapper.dart';
 import 'package:medical_order_management/screens/auth/login_screen.dart';
+import 'package:medical_order_management/screens/representative/order/add_medicines_screen.dart';
+import 'package:medical_order_management/screens/representative/order/create_order_screen.dart';
 import 'package:medical_order_management/screens/representative/representative_dashboard_screen.dart';
 
 void main() {
@@ -1027,13 +1030,13 @@ void main() {
       expect(find.text('Active Network'), findsOneWidget);
       expect(find.text('Pending Delivery'), findsOneWidget);
 
-      // Tapping Create New Order shows placeholder dialog
+      // Tapping Create New Order opens CreateOrderScreen
       await tester.tap(find.text('Create New Order'));
       await tester.pumpAndSettle();
 
-      expect(find.text('Order creation will be available here.'), findsOneWidget);
-      await tester.tap(find.text('OK'));
-      await tester.pumpAndSettle();
+      expect(find.byType(CreateOrderScreen), findsOneWidget);
+      expect(find.text('Step 1 of 2'), findsOneWidget);
+      expect(find.text('Doctor & Chemist'), findsOneWidget);
     });
 
     testWidgets('bottom navigation switches between Home, Orders, and Profile tabs',
@@ -1242,6 +1245,326 @@ void main() {
       expect(find.byType(RepresentativeDashboardScreen), findsOneWidget);
       expect(find.text('Medical Representative'), findsNWidgets(2));
       expect(find.text('Welcome, Rep Bob'), findsOneWidget);
+    });
+  });
+
+  group('Order Creation Flow Tests', () {
+    const activeDoc1 = Doctor(
+      id: 'DOC_1',
+      name: 'Dr. Rajesh Kumar',
+      specialization: 'Cardiologist',
+      phone: '+919876543210',
+      active: true,
+    );
+
+    const activeDoc2 = Doctor(
+      id: 'DOC_2',
+      name: 'Dr. Sneha Patel',
+      specialization: 'Pediatrician',
+      phone: '+919811223344',
+      active: true,
+    );
+
+    const inactiveDoc = Doctor(
+      id: 'DOC_INACTIVE',
+      name: 'Dr. Inactive Specialist',
+      specialization: 'Neurologist',
+      phone: '+919999999999',
+      active: false,
+    );
+
+    const activeChemist1 = Chemist(
+      id: 'CHM_1',
+      name: 'Apollo Pharmacy',
+      phone: '+919876543299',
+      address: 'MG Road, Bangalore',
+      active: true,
+    );
+
+    const activeChemist2 = Chemist(
+      id: 'CHM_2',
+      name: 'MedPlus Chemist',
+      phone: '+919822334455',
+      address: 'Indiranagar 100ft Road',
+      active: true,
+    );
+
+    const inactiveChemist = Chemist(
+      id: 'CHM_INACTIVE',
+      name: 'Closed Pharmacy',
+      phone: '+919000000000',
+      address: 'Ghost Town',
+      active: false,
+    );
+
+    test('OrderDraft model holds doctor and chemist data correctly in memory', () {
+      final draft = OrderDraft(
+        doctor: activeDoc1,
+        chemist: activeChemist1,
+      );
+
+      expect(draft.doctorId, 'DOC_1');
+      expect(draft.doctorName, 'Dr. Rajesh Kumar');
+      expect(draft.doctorSpecialization, 'Cardiologist');
+      expect(draft.doctorPhone, '+919876543210');
+
+      expect(draft.chemistId, 'CHM_1');
+      expect(draft.chemistName, 'Apollo Pharmacy');
+      expect(draft.chemistPhone, '+919876543299');
+      expect(draft.chemistAddress, 'MG Road, Bangalore');
+
+      final updatedDraft = draft.copyWith(doctor: activeDoc2);
+      expect(updatedDraft.doctorId, 'DOC_2');
+      expect(updatedDraft.doctorName, 'Dr. Sneha Patel');
+      expect(updatedDraft.chemistId, 'CHM_1');
+    });
+
+    testWidgets('CreateOrderScreen renders step indicator and active doctors only',
+        (WidgetTester tester) async {
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            activeDoctorsStreamProvider.overrideWith(
+              (ref) => Stream.value([activeDoc1, activeDoc2, inactiveDoc]),
+            ),
+            activeChemistsStreamProvider.overrideWith(
+              (ref) => Stream.value([activeChemist1, activeChemist2]),
+            ),
+          ],
+          child: const MaterialApp(
+            home: CreateOrderScreen(),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      // Step indicator
+      expect(find.text('Step 1 of 2'), findsOneWidget);
+      expect(find.text('Doctor & Chemist'), findsOneWidget);
+      expect(find.text('Select Doctor'), findsOneWidget);
+      expect(find.text('Select Chemist'), findsOneWidget);
+
+      // Active doctors rendered
+      expect(find.text('Dr. Rajesh Kumar'), findsOneWidget);
+      expect(find.text('Cardiologist'), findsOneWidget);
+      expect(find.text('Dr. Sneha Patel'), findsOneWidget);
+      expect(find.text('Pediatrician'), findsOneWidget);
+
+      // Inactive doctor NOT rendered
+      expect(find.text('Dr. Inactive Specialist'), findsNothing);
+
+      // Continue button rendered
+      expect(find.text('Continue'), findsOneWidget);
+    });
+
+    testWidgets('Doctor search filters by name, specialization, and phone',
+        (WidgetTester tester) async {
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            activeDoctorsStreamProvider.overrideWith(
+              (ref) => Stream.value([activeDoc1, activeDoc2]),
+            ),
+            activeChemistsStreamProvider.overrideWith(
+              (ref) => Stream.value([activeChemist1]),
+            ),
+          ],
+          child: const MaterialApp(
+            home: CreateOrderScreen(),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      // Search by name
+      await tester.enterText(find.widgetWithText(TextField, 'Search doctors...'), 'Sneha');
+      await tester.pumpAndSettle();
+
+      expect(find.text('Dr. Sneha Patel'), findsOneWidget);
+      expect(find.text('Dr. Rajesh Kumar'), findsNothing);
+
+      // Search by specialization
+      await tester.enterText(find.widgetWithText(TextField, 'Search doctors...'), 'Cardio');
+      await tester.pumpAndSettle();
+
+      expect(find.text('Dr. Rajesh Kumar'), findsOneWidget);
+      expect(find.text('Dr. Sneha Patel'), findsNothing);
+
+      // Search by phone
+      await tester.enterText(find.widgetWithText(TextField, 'Search doctors...'), '981122');
+      await tester.pumpAndSettle();
+
+      expect(find.text('Dr. Sneha Patel'), findsOneWidget);
+      expect(find.text('Dr. Rajesh Kumar'), findsNothing);
+
+      // Search with no results
+      await tester.enterText(find.widgetWithText(TextField, 'Search doctors...'), 'Nonexistent');
+      await tester.pumpAndSettle();
+
+      expect(find.text('No doctors found.'), findsOneWidget);
+    });
+
+    testWidgets('Chemist tab displays active chemists and filters by search',
+        (WidgetTester tester) async {
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            activeDoctorsStreamProvider.overrideWith(
+              (ref) => Stream.value([activeDoc1]),
+            ),
+            activeChemistsStreamProvider.overrideWith(
+              (ref) => Stream.value([activeChemist1, activeChemist2, inactiveChemist]),
+            ),
+          ],
+          child: const MaterialApp(
+            home: CreateOrderScreen(),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      // Switch to Chemist tab
+      await tester.tap(find.text('Select Chemist'));
+      await tester.pumpAndSettle();
+
+      // Active chemists rendered
+      expect(find.text('Apollo Pharmacy'), findsOneWidget);
+      expect(find.text('MG Road, Bangalore'), findsOneWidget);
+      expect(find.text('MedPlus Chemist'), findsOneWidget);
+
+      // Inactive chemist NOT rendered
+      expect(find.text('Closed Pharmacy'), findsNothing);
+
+      // Search chemists by address
+      await tester.enterText(find.widgetWithText(TextField, 'Search chemists...'), 'Indiranagar');
+      await tester.pumpAndSettle();
+
+      expect(find.text('MedPlus Chemist'), findsOneWidget);
+      expect(find.text('Apollo Pharmacy'), findsNothing);
+
+      // Search chemists with no results
+      await tester.enterText(find.widgetWithText(TextField, 'Search chemists...'), 'Nonexistent');
+      await tester.pumpAndSettle();
+
+      expect(find.text('No chemists found.'), findsOneWidget);
+    });
+
+    testWidgets('Empty list shows proper placeholder messages',
+        (WidgetTester tester) async {
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            activeDoctorsStreamProvider.overrideWith(
+              (ref) => Stream.value([]),
+            ),
+            activeChemistsStreamProvider.overrideWith(
+              (ref) => Stream.value([]),
+            ),
+          ],
+          child: const MaterialApp(
+            home: CreateOrderScreen(),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      // Doctor empty state
+      expect(find.text('No active doctors available.'), findsOneWidget);
+
+      // Switch to Chemist tab
+      await tester.tap(find.text('Select Chemist'));
+      await tester.pumpAndSettle();
+
+      // Chemist empty state
+      expect(find.text('No active chemists available.'), findsOneWidget);
+    });
+
+    testWidgets('Full selection workflow: select doctor, select chemist, continue to AddMedicinesScreen',
+        (WidgetTester tester) async {
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            activeDoctorsStreamProvider.overrideWith(
+              (ref) => Stream.value([activeDoc1, activeDoc2]),
+            ),
+            activeChemistsStreamProvider.overrideWith(
+              (ref) => Stream.value([activeChemist1, activeChemist2]),
+            ),
+          ],
+          child: const MaterialApp(
+            home: CreateOrderScreen(),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      // Initially neither doctor nor chemist is selected
+      expect(find.text('Doctor required'), findsOneWidget);
+      expect(find.text('Chemist required'), findsOneWidget);
+
+      // Tap Continue before selecting both -> triggers SnackBar indicating doctor is missing
+      await tester.tap(find.text('Continue'));
+      await tester.pumpAndSettle();
+      expect(find.text('Please select a doctor to continue.'), findsOneWidget);
+      await tester.pump(const Duration(seconds: 4));
+      await tester.pumpAndSettle();
+
+      // Select Doctor 1
+      await tester.tap(find.text('Dr. Rajesh Kumar'));
+      await tester.pumpAndSettle();
+
+      // Doctor is selected: chip updates and doctor name appears in status
+      expect(find.text('Dr. Rajesh Kumar'), findsWidgets);
+
+      // Tap Continue before selecting chemist -> triggers SnackBar indicating chemist is missing
+      await tester.tap(find.text('Continue'));
+      await tester.pumpAndSettle();
+      expect(find.text('Please select a chemist to continue.'), findsOneWidget);
+      await tester.pump(const Duration(seconds: 4));
+      await tester.pumpAndSettle();
+
+      // Switch to Chemist tab (if not already there)
+      await tester.tap(find.text('Select Chemist'));
+      await tester.pumpAndSettle();
+
+      // Select Chemist 1
+      await tester.tap(find.text('Apollo Pharmacy'));
+      await tester.pumpAndSettle();
+
+      // Both selected: doctor and chemist status chips show selected names
+      expect(find.text('Apollo Pharmacy'), findsWidgets);
+
+      // Switching back to Doctor tab preserves selected doctor
+      await tester.tap(find.text('Select Doctor'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Dr. Rajesh Kumar'), findsWidgets);
+
+      // Tap Continue now that both are selected
+      await tester.tap(find.text('Continue'));
+      await tester.pumpAndSettle();
+
+      // Navigated to AddMedicinesScreen placeholder
+      expect(find.byType(AddMedicinesScreen), findsOneWidget);
+      expect(find.text('Add Medicines'), findsOneWidget);
+      expect(find.text('Step 2 of 2: Medicines Selection'), findsOneWidget);
+      expect(
+        find.text('Medicine selection will be implemented in the next stage.'),
+        findsOneWidget,
+      );
+
+      // Verified passed forward data
+      expect(find.text('Dr. Rajesh Kumar'), findsOneWidget);
+      expect(find.text('Cardiologist'), findsOneWidget);
+      expect(find.text('Phone: +919876543210'), findsOneWidget);
+      expect(find.text('Apollo Pharmacy'), findsOneWidget);
+      expect(find.text('MG Road, Bangalore'), findsOneWidget);
+      expect(find.text('Phone: +919876543299'), findsOneWidget);
     });
   });
 }

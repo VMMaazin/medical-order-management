@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../models/app_user.dart';
+import 'order/create_order_screen.dart';
 
 class RepresentativeHomeScreen extends StatelessWidget {
   final AppUser user;
@@ -12,27 +13,10 @@ class RepresentativeHomeScreen extends StatelessWidget {
     this.onNavigateToOrders,
   });
 
-  void _showOrderCreationPlaceholder(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Row(
-          children: [
-            Icon(Icons.add_shopping_cart, color: Color(0xFF0D9488)),
-            SizedBox(width: 10),
-            Text('Create Order'),
-          ],
-        ),
-        content: const Text(
-          'Order creation will be available here.',
-          style: TextStyle(fontSize: 15),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('OK'),
-          ),
-        ],
+  void _navigateToCreateOrder(BuildContext context) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => const CreateOrderScreen(),
       ),
     );
   }
@@ -173,7 +157,7 @@ class RepresentativeHomeScreen extends StatelessWidget {
               color: const Color(0xFF0D9488).withAlpha(15),
               child: InkWell(
                 borderRadius: BorderRadius.circular(14),
-                onTap: () => _showOrderCreationPlaceholder(context),
+                onTap: () => _navigateToCreateOrder(context),
                 child: Padding(
                   padding: const EdgeInsets.all(16.0),
                   child: Row(
