@@ -1,0 +1,46 @@
+{
+  "project_info": {
+    "project_number": "737325074723",
+    "project_id": "medical-order-management",
+    "storage_bucket": "medical-order-management.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:737325074723:android:3a087b3bf680bda5e76496",
+        "android_client_info": {
+          "package_name": "com.medicalorder.medical_order_management"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "737325074723-3ir46vojm1gj6el8qbhgk9lpd9gl5h3q.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDgxq41lQ15Kl5Qx6F76yW64_Yjrz0ZN-c"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "737325074723-3ir46vojm1gj6el8qbhgk9lpd9gl5h3q.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "737325074723-pnsk2oml63di2fd1d41crkook8a8gqrt.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.medicalorder.medicalOrderManagement"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
