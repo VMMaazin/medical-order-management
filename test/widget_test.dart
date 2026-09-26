@@ -3,14 +3,19 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:medical_order_management/models/app_user.dart';
+import 'package:medical_order_management/models/doctor.dart';
 import 'package:medical_order_management/models/medicine.dart';
 import 'package:medical_order_management/models/medicine_variant.dart';
 import 'package:medical_order_management/providers/auth_provider.dart';
+import 'package:medical_order_management/providers/doctor_provider.dart';
 import 'package:medical_order_management/providers/medicine_provider.dart';
 import 'package:medical_order_management/screens/admin/admin_dashboard_screen.dart';
 import 'package:medical_order_management/screens/admin/admin_management_screen.dart';
 import 'package:medical_order_management/screens/admin/admin_orders_screen.dart';
 import 'package:medical_order_management/screens/admin/admin_profile_screen.dart';
+import 'package:medical_order_management/screens/admin/doctor/add_doctor_screen.dart';
+import 'package:medical_order_management/screens/admin/doctor/doctor_details_screen.dart';
+import 'package:medical_order_management/screens/admin/doctor/doctors_screen.dart';
 import 'package:medical_order_management/screens/admin/medicine/add_medicine_screen.dart';
 import 'package:medical_order_management/screens/admin/medicine/add_variant_dialog.dart';
 import 'package:medical_order_management/screens/admin/medicine/medicine_details_screen.dart';
@@ -21,6 +26,34 @@ import 'package:medical_order_management/screens/auth/login_screen.dart';
 import 'package:medical_order_management/screens/representative/representative_dashboard_screen.dart';
 
 void main() {
+  group('Doctor Model Tests', () {
+    test('Doctor serialization and deserialization', () {
+      final now = DateTime.now();
+      final doctor = Doctor(
+        id: 'DOC001',
+        name: 'Dr. Rajesh Kumar',
+        specialization: 'Cardiologist',
+        phone: '+919876543210',
+        active: true,
+        createdAt: now,
+        updatedAt: now,
+      );
+
+      final map = doctor.toMap();
+      expect(map['name'], 'Dr. Rajesh Kumar');
+      expect(map['specialization'], 'Cardiologist');
+      expect(map['phone'], '+919876543210');
+      expect(map['active'], true);
+
+      final reconstructed = Doctor.fromFirestore(map, 'DOC001');
+      expect(reconstructed.id, 'DOC001');
+      expect(reconstructed.name, 'Dr. Rajesh Kumar');
+      expect(reconstructed.specialization, 'Cardiologist');
+      expect(reconstructed.phone, '+919876543210');
+      expect(reconstructed.active, true);
+    });
+  });
+
   group('Medicine Model Tests', () {
     test('Medicine serialization and deserialization', () {
       final now = DateTime.now();
@@ -199,7 +232,28 @@ void main() {
       expect(find.text('Add Medicine'), findsNWidgets(2)); // FAB and empty state button
     });
 
-    testWidgets('tapping Doctors card opens PlaceholderScreen with Coming Soon',
+    testWidgets('tapping Doctors card navigates to real DoctorsScreen',
+        (WidgetTester tester) async {
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            doctorsStreamProvider.overrideWith((ref) => Stream.value([])),
+          ],
+          child: const MaterialApp(
+            home: AdminDashboardScreen(user: adminUser),
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('Doctors'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(DoctorsScreen), findsOneWidget);
+      expect(find.text('Search doctors...'), findsOneWidget);
+      expect(find.text('Add Doctor'), findsNWidgets(2)); // FAB and empty state button
+    });
+
+    testWidgets('tapping Chemists card opens PlaceholderScreen with Coming Soon',
         (WidgetTester tester) async {
       await tester.pumpWidget(
         const ProviderScope(
@@ -209,12 +263,12 @@ void main() {
         ),
       );
 
-      await tester.tap(find.text('Doctors'));
+      await tester.tap(find.text('Chemists'));
       await tester.pumpAndSettle();
 
       expect(find.byType(PlaceholderScreen), findsOneWidget);
       expect(find.text('Coming Soon'), findsOneWidget);
-      expect(find.text('Doctors'), findsNWidgets(2)); // AppBar & body title
+      expect(find.text('Chemists'), findsNWidgets(2)); // AppBar & body title
     });
 
     testWidgets('bottom navigation switches between tabs',
@@ -393,6 +447,129 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Cannot exceed MRP'), findsOneWidget);
+    });
+  });
+
+  group('Doctor Management Screens Tests', () {
+    testWidgets('DoctorsScreen renders doctor list with active status',
+        (WidgetTester tester) async {
+      const doc = Doctor(
+        id: 'DOC1',
+        name: 'Dr. Rajesh Kumar',
+        specialization: 'Cardiologist',
+        phone: '+919876543210',
+        active: true,
+      );
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            doctorsStreamProvider.overrideWith((ref) => Stream.value([doc])),
+          ],
+          child: const MaterialApp(
+            home: DoctorsScreen(),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      expect(find.text('Dr. Rajesh Kumar'), findsOneWidget);
+      expect(find.text('Cardiologist'), findsOneWidget);
+      expect(find.text('+919876543210'), findsOneWidget);
+      expect(find.text('ACTIVE'), findsOneWidget);
+    });
+
+    testWidgets('AddDoctorScreen validates required fields and phone format',
+        (WidgetTester tester) async {
+      await tester.pumpWidget(
+        const ProviderScope(
+          child: MaterialApp(
+            home: AddDoctorScreen(),
+          ),
+        ),
+      );
+
+      // Try submitting empty form
+      await tester.tap(find.widgetWithText(ElevatedButton, 'Add Doctor'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Please enter doctor name'), findsOneWidget);
+      expect(find.text('Please enter doctor specialization'), findsOneWidget);
+
+      // Enter invalid phone number
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Doctor Name *'),
+        'Dr. Test',
+      );
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Specialization *'),
+        'Dentist',
+      );
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Phone Number (Optional)'),
+        '12345',
+      );
+
+      await tester.tap(find.widgetWithText(ElevatedButton, 'Add Doctor'));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text('Please enter a valid 10-digit Indian phone number'),
+        findsOneWidget,
+      );
+
+      // Clear name so form does not submit to remote service
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Doctor Name *'),
+        '',
+      );
+
+      // Enter valid 10-digit phone number
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Phone Number (Optional)'),
+        '9876543210',
+      );
+
+      await tester.tap(find.widgetWithText(ElevatedButton, 'Add Doctor'));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text('Please enter a valid 10-digit Indian phone number'),
+        findsNothing,
+      );
+      expect(find.text('Please enter doctor name'), findsOneWidget);
+    });
+
+    testWidgets('DoctorDetailsScreen displays doctor details and deactivation option',
+        (WidgetTester tester) async {
+      const doc = Doctor(
+        id: 'DOC1',
+        name: 'Dr. Priya Sharma',
+        specialization: 'Dermatologist',
+        phone: '+919876543211',
+        active: true,
+      );
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            singleDoctorProvider('DOC1').overrideWith((ref) => Stream.value(doc)),
+          ],
+          child: const MaterialApp(
+            home: DoctorDetailsScreen(doctorId: 'DOC1'),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      expect(find.text('Dr. Priya Sharma'), findsOneWidget);
+      expect(find.text('Dermatologist'), findsOneWidget);
+      expect(find.text('+919876543211'), findsOneWidget);
+      expect(find.text('ACTIVE'), findsOneWidget);
+      expect(find.text('Edit'), findsOneWidget);
+      expect(find.text('Deactivate'), findsOneWidget);
     });
   });
 

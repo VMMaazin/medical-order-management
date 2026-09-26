@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'doctor/doctors_screen.dart';
 import 'medicine/medicines_screen.dart';
 import 'placeholder_screen.dart';
 
@@ -70,13 +71,13 @@ class AdminManagementScreen extends StatelessWidget {
               subtitle: 'Manage registered doctor directory and specializations',
               icon: Icons.medical_information_outlined,
               iconColor: const Color(0xFF0284C7),
-              onTap: () => _navigateToPlaceholder(
-                context,
-                sectionName: 'Doctors',
-                icon: Icons.medical_information_outlined,
-                description:
-                    'Maintain doctor database, contact details, and clinic affiliations.',
-              ),
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const DoctorsScreen(),
+                  ),
+                );
+              },
             ),
             const SizedBox(height: 12),
             _ManagementTile(

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../models/app_user.dart';
 import '../../widgets/admin/dashboard_card.dart';
+import 'doctor/doctors_screen.dart';
 import 'medicine/medicines_screen.dart';
 import 'placeholder_screen.dart';
 
@@ -158,13 +159,13 @@ class AdminHomeScreen extends StatelessWidget {
                         subtitle: 'Manage doctors',
                         icon: Icons.medical_information_outlined,
                         iconColor: const Color(0xFF0284C7),
-                        onTap: () => _navigateToPlaceholder(
-                          context,
-                          sectionName: 'Doctors',
-                          icon: Icons.medical_information_outlined,
-                          description:
-                              'Manage doctor profiles, specializations, contact details, and affiliations.',
-                        ),
+                        onTap: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => const DoctorsScreen(),
+                            ),
+                          );
+                        },
                       ),
                       DashboardCard(
                         title: 'Chemists',
