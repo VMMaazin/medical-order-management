@@ -3,16 +3,21 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:medical_order_management/models/app_user.dart';
+import 'package:medical_order_management/models/chemist.dart';
 import 'package:medical_order_management/models/doctor.dart';
 import 'package:medical_order_management/models/medicine.dart';
 import 'package:medical_order_management/models/medicine_variant.dart';
 import 'package:medical_order_management/providers/auth_provider.dart';
+import 'package:medical_order_management/providers/chemist_provider.dart';
 import 'package:medical_order_management/providers/doctor_provider.dart';
 import 'package:medical_order_management/providers/medicine_provider.dart';
 import 'package:medical_order_management/screens/admin/admin_dashboard_screen.dart';
 import 'package:medical_order_management/screens/admin/admin_management_screen.dart';
 import 'package:medical_order_management/screens/admin/admin_orders_screen.dart';
 import 'package:medical_order_management/screens/admin/admin_profile_screen.dart';
+import 'package:medical_order_management/screens/admin/chemist/add_chemist_screen.dart';
+import 'package:medical_order_management/screens/admin/chemist/chemist_details_screen.dart';
+import 'package:medical_order_management/screens/admin/chemist/chemists_screen.dart';
 import 'package:medical_order_management/screens/admin/doctor/add_doctor_screen.dart';
 import 'package:medical_order_management/screens/admin/doctor/doctor_details_screen.dart';
 import 'package:medical_order_management/screens/admin/doctor/doctors_screen.dart';
@@ -50,6 +55,34 @@ void main() {
       expect(reconstructed.name, 'Dr. Rajesh Kumar');
       expect(reconstructed.specialization, 'Cardiologist');
       expect(reconstructed.phone, '+919876543210');
+      expect(reconstructed.active, true);
+    });
+  });
+
+  group('Chemist Model Tests', () {
+    test('Chemist serialization and deserialization', () {
+      final now = DateTime.now();
+      final chemist = Chemist(
+        id: 'CHM001',
+        name: 'Apollo Pharmacy',
+        phone: '+919876543210',
+        address: '123 Main Road, Bangalore',
+        active: true,
+        createdAt: now,
+        updatedAt: now,
+      );
+
+      final map = chemist.toMap();
+      expect(map['name'], 'Apollo Pharmacy');
+      expect(map['phone'], '+919876543210');
+      expect(map['address'], '123 Main Road, Bangalore');
+      expect(map['active'], true);
+
+      final reconstructed = Chemist.fromFirestore(map, 'CHM001');
+      expect(reconstructed.id, 'CHM001');
+      expect(reconstructed.name, 'Apollo Pharmacy');
+      expect(reconstructed.phone, '+919876543210');
+      expect(reconstructed.address, '123 Main Road, Bangalore');
       expect(reconstructed.active, true);
     });
   });
@@ -253,7 +286,28 @@ void main() {
       expect(find.text('Add Doctor'), findsNWidgets(2)); // FAB and empty state button
     });
 
-    testWidgets('tapping Chemists card opens PlaceholderScreen with Coming Soon',
+    testWidgets('tapping Chemists card navigates to real ChemistsScreen',
+        (WidgetTester tester) async {
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            chemistsStreamProvider.overrideWith((ref) => Stream.value([])),
+          ],
+          child: const MaterialApp(
+            home: AdminDashboardScreen(user: adminUser),
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('Chemists'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(ChemistsScreen), findsOneWidget);
+      expect(find.text('Search chemists...'), findsOneWidget);
+      expect(find.text('Add Chemist'), findsNWidgets(2)); // FAB and empty state button
+    });
+
+    testWidgets('tapping Representatives card opens PlaceholderScreen with Coming Soon',
         (WidgetTester tester) async {
       await tester.pumpWidget(
         const ProviderScope(
@@ -263,12 +317,13 @@ void main() {
         ),
       );
 
-      await tester.tap(find.text('Chemists'));
+      await tester.ensureVisible(find.text('Representatives'));
+      await tester.tap(find.text('Representatives'));
       await tester.pumpAndSettle();
 
       expect(find.byType(PlaceholderScreen), findsOneWidget);
       expect(find.text('Coming Soon'), findsOneWidget);
-      expect(find.text('Chemists'), findsNWidgets(2)); // AppBar & body title
+      expect(find.text('Medical Representatives'), findsNWidgets(2)); // AppBar & body title
     });
 
     testWidgets('bottom navigation switches between tabs',
@@ -567,6 +622,130 @@ void main() {
       expect(find.text('Dr. Priya Sharma'), findsOneWidget);
       expect(find.text('Dermatologist'), findsOneWidget);
       expect(find.text('+919876543211'), findsOneWidget);
+      expect(find.text('ACTIVE'), findsOneWidget);
+      expect(find.text('Edit'), findsOneWidget);
+      expect(find.text('Deactivate'), findsOneWidget);
+    });
+  });
+
+  group('Chemist Management Screens Tests', () {
+    testWidgets('ChemistsScreen renders chemist list with active status and details',
+        (WidgetTester tester) async {
+      const chm = Chemist(
+        id: 'CHM1',
+        name: 'Apollo Pharmacy',
+        phone: '+919876543210',
+        address: '123 MG Road, Bangalore',
+        active: true,
+      );
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            chemistsStreamProvider.overrideWith((ref) => Stream.value([chm])),
+          ],
+          child: const MaterialApp(
+            home: ChemistsScreen(),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      expect(find.text('Apollo Pharmacy'), findsOneWidget);
+      expect(find.text('+919876543210'), findsOneWidget);
+      expect(find.text('123 MG Road, Bangalore'), findsOneWidget);
+      expect(find.text('ACTIVE'), findsOneWidget);
+    });
+
+    testWidgets('AddChemistScreen validates required fields and Indian phone format',
+        (WidgetTester tester) async {
+      await tester.pumpWidget(
+        const ProviderScope(
+          child: MaterialApp(
+            home: AddChemistScreen(),
+          ),
+        ),
+      );
+
+      // Try submitting empty form
+      await tester.tap(find.widgetWithText(ElevatedButton, 'Add Chemist'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Please enter chemist/shop name'), findsOneWidget);
+      expect(find.text('Please enter phone number'), findsOneWidget);
+      expect(find.text('Please enter address'), findsOneWidget);
+
+      // Enter invalid phone number
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Chemist / Shop Name *'),
+        'Apollo Pharmacy',
+      );
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Address *'),
+        '123 MG Road',
+      );
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Phone Number *'),
+        '12345',
+      );
+
+      await tester.tap(find.widgetWithText(ElevatedButton, 'Add Chemist'));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text('Please enter a valid 10-digit Indian phone number'),
+        findsOneWidget,
+      );
+
+      // Clear name so form does not submit to remote service
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Chemist / Shop Name *'),
+        '',
+      );
+
+      // Enter valid 10-digit phone number
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Phone Number *'),
+        '9876543210',
+      );
+
+      await tester.tap(find.widgetWithText(ElevatedButton, 'Add Chemist'));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text('Please enter a valid 10-digit Indian phone number'),
+        findsNothing,
+      );
+      expect(find.text('Please enter chemist/shop name'), findsOneWidget);
+    });
+
+    testWidgets('ChemistDetailsScreen displays chemist details and deactivation option',
+        (WidgetTester tester) async {
+      const chm = Chemist(
+        id: 'CHM1',
+        name: 'MedPlus Pharmacy',
+        phone: '+919876543212',
+        address: '456 Brigade Road, Bangalore',
+        active: true,
+      );
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            singleChemistProvider('CHM1').overrideWith((ref) => Stream.value(chm)),
+          ],
+          child: const MaterialApp(
+            home: ChemistDetailsScreen(chemistId: 'CHM1'),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      expect(find.text('MedPlus Pharmacy'), findsOneWidget);
+      expect(find.text('+919876543212'), findsOneWidget);
+      expect(find.text('456 Brigade Road, Bangalore'), findsOneWidget);
       expect(find.text('ACTIVE'), findsOneWidget);
       expect(find.text('Edit'), findsOneWidget);
       expect(find.text('Deactivate'), findsOneWidget);

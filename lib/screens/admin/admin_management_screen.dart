@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'chemist/chemists_screen.dart';
 import 'doctor/doctors_screen.dart';
 import 'medicine/medicines_screen.dart';
 import 'placeholder_screen.dart';
@@ -85,13 +86,13 @@ class AdminManagementScreen extends StatelessWidget {
               subtitle: 'Manage retail pharmacy and chemist shop records',
               icon: Icons.storefront_outlined,
               iconColor: const Color(0xFFE11D48),
-              onTap: () => _navigateToPlaceholder(
-                context,
-                sectionName: 'Chemists',
-                icon: Icons.storefront_outlined,
-                description:
-                    'Manage chemist shops, delivery addresses, and phone contacts.',
-              ),
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const ChemistsScreen(),
+                  ),
+                );
+              },
             ),
             const SizedBox(height: 12),
             _ManagementTile(

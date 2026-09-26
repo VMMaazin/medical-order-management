@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../models/app_user.dart';
 import '../../widgets/admin/dashboard_card.dart';
+import 'chemist/chemists_screen.dart';
 import 'doctor/doctors_screen.dart';
 import 'medicine/medicines_screen.dart';
 import 'placeholder_screen.dart';
@@ -172,13 +173,13 @@ class AdminHomeScreen extends StatelessWidget {
                         subtitle: 'Manage chemist shops',
                         icon: Icons.storefront_outlined,
                         iconColor: const Color(0xFFE11D48),
-                        onTap: () => _navigateToPlaceholder(
-                          context,
-                          sectionName: 'Chemists',
-                          icon: Icons.storefront_outlined,
-                          description:
-                              'Manage chemist shops, pharmacy addresses, contacts, and delivery locations.',
-                        ),
+                        onTap: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => const ChemistsScreen(),
+                            ),
+                          );
+                        },
                       ),
                       DashboardCard(
                         title: 'Representatives',
