@@ -2,28 +2,11 @@ import 'package:flutter/material.dart';
 
 import 'chemist/chemists_screen.dart';
 import 'doctor/doctors_screen.dart';
+import 'medical_rep/medical_reps_screen.dart';
 import 'medicine/medicines_screen.dart';
-import 'placeholder_screen.dart';
 
 class AdminManagementScreen extends StatelessWidget {
   const AdminManagementScreen({super.key});
-
-  void _navigateToPlaceholder(
-    BuildContext context, {
-    required String sectionName,
-    required IconData icon,
-    required String description,
-  }) {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => PlaceholderScreen(
-          sectionName: sectionName,
-          icon: icon,
-          description: description,
-        ),
-      ),
-    );
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -100,13 +83,13 @@ class AdminManagementScreen extends StatelessWidget {
               subtitle: 'Manage field representatives and account statuses',
               icon: Icons.people_alt_outlined,
               iconColor: const Color(0xFF7C3AED),
-              onTap: () => _navigateToPlaceholder(
-                context,
-                sectionName: 'Medical Representatives',
-                icon: Icons.people_alt_outlined,
-                description:
-                    'Review representative credentials, territory assignments, and statuses.',
-              ),
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const MedicalRepsScreen(),
+                  ),
+                );
+              },
             ),
           ],
         ),

@@ -4,6 +4,7 @@ import '../../models/app_user.dart';
 import '../../widgets/admin/dashboard_card.dart';
 import 'chemist/chemists_screen.dart';
 import 'doctor/doctors_screen.dart';
+import 'medical_rep/medical_reps_screen.dart';
 import 'medicine/medicines_screen.dart';
 import 'placeholder_screen.dart';
 
@@ -186,13 +187,13 @@ class AdminHomeScreen extends StatelessWidget {
                         subtitle: 'Manage representatives',
                         icon: Icons.people_alt_outlined,
                         iconColor: const Color(0xFF7C3AED),
-                        onTap: () => _navigateToPlaceholder(
-                          context,
-                          sectionName: 'Medical Representatives',
-                          icon: Icons.people_alt_outlined,
-                          description:
-                              'Manage medical representative accounts, assignments, and active statuses.',
-                        ),
+                        onTap: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => const MedicalRepsScreen(),
+                            ),
+                          );
+                        },
                       ),
                       DashboardCard(
                         title: 'Orders',

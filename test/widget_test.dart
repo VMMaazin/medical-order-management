@@ -5,11 +5,13 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:medical_order_management/models/app_user.dart';
 import 'package:medical_order_management/models/chemist.dart';
 import 'package:medical_order_management/models/doctor.dart';
+import 'package:medical_order_management/models/medical_rep.dart';
 import 'package:medical_order_management/models/medicine.dart';
 import 'package:medical_order_management/models/medicine_variant.dart';
 import 'package:medical_order_management/providers/auth_provider.dart';
 import 'package:medical_order_management/providers/chemist_provider.dart';
 import 'package:medical_order_management/providers/doctor_provider.dart';
+import 'package:medical_order_management/providers/medical_rep_provider.dart';
 import 'package:medical_order_management/providers/medicine_provider.dart';
 import 'package:medical_order_management/screens/admin/admin_dashboard_screen.dart';
 import 'package:medical_order_management/screens/admin/admin_management_screen.dart';
@@ -21,6 +23,9 @@ import 'package:medical_order_management/screens/admin/chemist/chemists_screen.d
 import 'package:medical_order_management/screens/admin/doctor/add_doctor_screen.dart';
 import 'package:medical_order_management/screens/admin/doctor/doctor_details_screen.dart';
 import 'package:medical_order_management/screens/admin/doctor/doctors_screen.dart';
+import 'package:medical_order_management/screens/admin/medical_rep/add_medical_rep_screen.dart';
+import 'package:medical_order_management/screens/admin/medical_rep/medical_rep_details_screen.dart';
+import 'package:medical_order_management/screens/admin/medical_rep/medical_reps_screen.dart';
 import 'package:medical_order_management/screens/admin/medicine/add_medicine_screen.dart';
 import 'package:medical_order_management/screens/admin/medicine/add_variant_dialog.dart';
 import 'package:medical_order_management/screens/admin/medicine/medicine_details_screen.dart';
@@ -83,6 +88,37 @@ void main() {
       expect(reconstructed.name, 'Apollo Pharmacy');
       expect(reconstructed.phone, '+919876543210');
       expect(reconstructed.address, '123 Main Road, Bangalore');
+      expect(reconstructed.active, true);
+    });
+  });
+
+  group('Medical Representative Model Tests', () {
+    test('MedicalRep serialization and deserialization', () {
+      final now = DateTime.now();
+      final rep = MedicalRep(
+        id: 'REP001',
+        name: 'Rahul Sharma',
+        email: 'rahul.sharma@med.com',
+        phone: '+919876543210',
+        role: 'medical_rep',
+        active: true,
+        createdAt: now,
+        updatedAt: now,
+      );
+
+      final map = rep.toMap();
+      expect(map['name'], 'Rahul Sharma');
+      expect(map['email'], 'rahul.sharma@med.com');
+      expect(map['phone'], '+919876543210');
+      expect(map['role'], 'medical_rep');
+      expect(map['active'], true);
+
+      final reconstructed = MedicalRep.fromFirestore(map, 'REP001');
+      expect(reconstructed.id, 'REP001');
+      expect(reconstructed.name, 'Rahul Sharma');
+      expect(reconstructed.email, 'rahul.sharma@med.com');
+      expect(reconstructed.phone, '+919876543210');
+      expect(reconstructed.role, 'medical_rep');
       expect(reconstructed.active, true);
     });
   });
@@ -307,11 +343,14 @@ void main() {
       expect(find.text('Add Chemist'), findsNWidgets(2)); // FAB and empty state button
     });
 
-    testWidgets('tapping Representatives card opens PlaceholderScreen with Coming Soon',
+    testWidgets('tapping Representatives card navigates to real MedicalRepsScreen',
         (WidgetTester tester) async {
       await tester.pumpWidget(
-        const ProviderScope(
-          child: MaterialApp(
+        ProviderScope(
+          overrides: [
+            medicalRepsStreamProvider.overrideWith((ref) => Stream.value([])),
+          ],
+          child: const MaterialApp(
             home: AdminDashboardScreen(user: adminUser),
           ),
         ),
@@ -321,9 +360,28 @@ void main() {
       await tester.tap(find.text('Representatives'));
       await tester.pumpAndSettle();
 
+      expect(find.byType(MedicalRepsScreen), findsOneWidget);
+      expect(find.text('Search representatives...'), findsOneWidget);
+      expect(find.text('Add Representative'), findsNWidgets(2)); // FAB and empty state button
+    });
+
+    testWidgets('tapping Reports card opens PlaceholderScreen with Coming Soon',
+        (WidgetTester tester) async {
+      await tester.pumpWidget(
+        const ProviderScope(
+          child: MaterialApp(
+            home: AdminDashboardScreen(user: adminUser),
+          ),
+        ),
+      );
+
+      await tester.ensureVisible(find.text('Reports'));
+      await tester.tap(find.text('Reports'));
+      await tester.pumpAndSettle();
+
       expect(find.byType(PlaceholderScreen), findsOneWidget);
       expect(find.text('Coming Soon'), findsOneWidget);
-      expect(find.text('Medical Representatives'), findsNWidgets(2)); // AppBar & body title
+      expect(find.text('Reports'), findsNWidgets(2)); // AppBar & body title
     });
 
     testWidgets('bottom navigation switches between tabs',
@@ -746,6 +804,136 @@ void main() {
       expect(find.text('MedPlus Pharmacy'), findsOneWidget);
       expect(find.text('+919876543212'), findsOneWidget);
       expect(find.text('456 Brigade Road, Bangalore'), findsOneWidget);
+      expect(find.text('ACTIVE'), findsOneWidget);
+      expect(find.text('Edit'), findsOneWidget);
+      expect(find.text('Deactivate'), findsOneWidget);
+    });
+  });
+
+  group('Medical Representative Management Screens Tests', () {
+    testWidgets('MedicalRepsScreen renders representative list with active status and details',
+        (WidgetTester tester) async {
+      const rep = MedicalRep(
+        id: 'REP1',
+        name: 'Rahul Sharma',
+        email: 'rahul.sharma@med.com',
+        phone: '+919876543210',
+        active: true,
+      );
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            medicalRepsStreamProvider.overrideWith((ref) => Stream.value([rep])),
+          ],
+          child: const MaterialApp(
+            home: MedicalRepsScreen(),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      expect(find.text('Rahul Sharma'), findsOneWidget);
+      expect(find.text('rahul.sharma@med.com'), findsOneWidget);
+      expect(find.text('+919876543210'), findsOneWidget);
+      expect(find.text('ACTIVE'), findsOneWidget);
+    });
+
+    testWidgets('AddMedicalRepScreen validates required fields, email format, and Indian phone format',
+        (WidgetTester tester) async {
+      await tester.pumpWidget(
+        const ProviderScope(
+          child: MaterialApp(
+            home: AddMedicalRepScreen(),
+          ),
+        ),
+      );
+
+      // Try submitting empty form
+      await tester.tap(find.widgetWithText(ElevatedButton, 'Create Representative'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Please enter representative name'), findsOneWidget);
+      expect(find.text('Please enter email address'), findsOneWidget);
+      expect(find.text('Please enter phone number'), findsOneWidget);
+
+      // Enter invalid email and invalid phone
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Full Name *'),
+        'Rahul Sharma',
+      );
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Email Address *'),
+        'invalid-email',
+      );
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Phone Number *'),
+        '12345',
+      );
+
+      await tester.tap(find.widgetWithText(ElevatedButton, 'Create Representative'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Please enter a valid email address'), findsOneWidget);
+      expect(
+        find.text('Please enter a valid 10-digit Indian phone number'),
+        findsOneWidget,
+      );
+
+      // Clear name so form does not submit to remote service
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Full Name *'),
+        '',
+      );
+
+      // Enter valid email and valid 10-digit phone
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Email Address *'),
+        'valid.rep@med.com',
+      );
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Phone Number *'),
+        '9876543210',
+      );
+
+      await tester.tap(find.widgetWithText(ElevatedButton, 'Create Representative'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Please enter a valid email address'), findsNothing);
+      expect(
+        find.text('Please enter a valid 10-digit Indian phone number'),
+        findsNothing,
+      );
+      expect(find.text('Please enter representative name'), findsOneWidget);
+    });
+
+    testWidgets('MedicalRepDetailsScreen displays representative details and deactivation option',
+        (WidgetTester tester) async {
+      const rep = MedicalRep(
+        id: 'REP1',
+        name: 'Pooja Verma',
+        email: 'pooja.verma@med.com',
+        phone: '+919876543219',
+        active: true,
+      );
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            singleMedicalRepProvider('REP1').overrideWith((ref) => Stream.value(rep)),
+          ],
+          child: const MaterialApp(
+            home: MedicalRepDetailsScreen(repId: 'REP1'),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      expect(find.text('Pooja Verma'), findsOneWidget);
+      expect(find.text('pooja.verma@med.com'), findsOneWidget);
+      expect(find.text('+919876543219'), findsOneWidget);
       expect(find.text('ACTIVE'), findsOneWidget);
       expect(find.text('Edit'), findsOneWidget);
       expect(find.text('Deactivate'), findsOneWidget);
