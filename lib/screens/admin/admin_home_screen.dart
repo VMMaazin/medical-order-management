@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../models/app_user.dart';
 import '../../widgets/admin/dashboard_card.dart';
+import 'medicine/medicines_screen.dart';
 import 'placeholder_screen.dart';
 
 class AdminHomeScreen extends StatelessWidget {
@@ -144,13 +145,13 @@ class AdminHomeScreen extends StatelessWidget {
                         subtitle: 'Manage medicines and variants',
                         icon: Icons.medication_outlined,
                         iconColor: const Color(0xFF0D9488),
-                        onTap: () => _navigateToPlaceholder(
-                          context,
-                          sectionName: 'Medicines',
-                          icon: Icons.medication_outlined,
-                          description:
-                              'Manage drug catalog, brand names, compositions, and dosage variants.',
-                        ),
+                        onTap: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => const MedicinesScreen(),
+                            ),
+                          );
+                        },
                       ),
                       DashboardCard(
                         title: 'Doctors',

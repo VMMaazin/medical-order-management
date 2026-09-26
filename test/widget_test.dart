@@ -3,17 +3,77 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:medical_order_management/models/app_user.dart';
+import 'package:medical_order_management/models/medicine.dart';
+import 'package:medical_order_management/models/medicine_variant.dart';
 import 'package:medical_order_management/providers/auth_provider.dart';
+import 'package:medical_order_management/providers/medicine_provider.dart';
 import 'package:medical_order_management/screens/admin/admin_dashboard_screen.dart';
 import 'package:medical_order_management/screens/admin/admin_management_screen.dart';
 import 'package:medical_order_management/screens/admin/admin_orders_screen.dart';
 import 'package:medical_order_management/screens/admin/admin_profile_screen.dart';
+import 'package:medical_order_management/screens/admin/medicine/add_medicine_screen.dart';
+import 'package:medical_order_management/screens/admin/medicine/add_variant_dialog.dart';
+import 'package:medical_order_management/screens/admin/medicine/medicine_details_screen.dart';
+import 'package:medical_order_management/screens/admin/medicine/medicines_screen.dart';
 import 'package:medical_order_management/screens/admin/placeholder_screen.dart';
 import 'package:medical_order_management/screens/auth/auth_wrapper.dart';
 import 'package:medical_order_management/screens/auth/login_screen.dart';
 import 'package:medical_order_management/screens/representative/representative_dashboard_screen.dart';
 
 void main() {
+  group('Medicine Model Tests', () {
+    test('Medicine serialization and deserialization', () {
+      final now = DateTime.now();
+      final medicine = Medicine(
+        id: 'MED001',
+        name: 'Azithromycin',
+        brand: 'ABC Pharma',
+        composition: 'Azithromycin IP',
+        category: 'Antibiotic',
+        active: true,
+        createdAt: now,
+        updatedAt: now,
+      );
+
+      final map = medicine.toMap();
+      expect(map['name'], 'Azithromycin');
+      expect(map['brand'], 'ABC Pharma');
+      expect(map['composition'], 'Azithromycin IP');
+      expect(map['category'], 'Antibiotic');
+      expect(map['active'], true);
+
+      final reconstructed = Medicine.fromFirestore(map, 'MED001');
+      expect(reconstructed.id, 'MED001');
+      expect(reconstructed.name, 'Azithromycin');
+      expect(reconstructed.brand, 'ABC Pharma');
+      expect(reconstructed.active, true);
+    });
+
+    test('MedicineVariant serialization and numeric price validation', () {
+      final variant = MedicineVariant(
+        id: 'VAR001',
+        medicineId: 'MED001',
+        form: 'Tablet',
+        strength: '500 mg',
+        packSize: '10 tablets',
+        mrp: 120.0,
+        supplierPrice: 90.0,
+        active: true,
+      );
+
+      final map = variant.toMap();
+      expect(map['medicineId'], 'MED001');
+      expect(map['form'], 'Tablet');
+      expect(map['mrp'], 120.0);
+      expect(map['supplierPrice'], 90.0);
+
+      final reconstructed = MedicineVariant.fromFirestore(map, 'VAR001');
+      expect(reconstructed.id, 'VAR001');
+      expect(reconstructed.mrp, 120.0);
+      expect(reconstructed.supplierPrice, 90.0);
+    });
+  });
+
   group('LoginScreen Tests', () {
     testWidgets('renders title, email, password fields and login button',
         (WidgetTester tester) async {
@@ -118,7 +178,28 @@ void main() {
       expect(find.text('View business/order reports'), findsOneWidget);
     });
 
-    testWidgets('tapping a dashboard card opens PlaceholderScreen with Coming Soon',
+    testWidgets('tapping Medicines card navigates to real MedicinesScreen',
+        (WidgetTester tester) async {
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            medicinesStreamProvider.overrideWith((ref) => Stream.value([])),
+          ],
+          child: const MaterialApp(
+            home: AdminDashboardScreen(user: adminUser),
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('Medicines'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(MedicinesScreen), findsOneWidget);
+      expect(find.text('Search medicines...'), findsOneWidget);
+      expect(find.text('Add Medicine'), findsNWidgets(2)); // FAB and empty state button
+    });
+
+    testWidgets('tapping Doctors card opens PlaceholderScreen with Coming Soon',
         (WidgetTester tester) async {
       await tester.pumpWidget(
         const ProviderScope(
@@ -128,12 +209,12 @@ void main() {
         ),
       );
 
-      await tester.tap(find.text('Medicines'));
+      await tester.tap(find.text('Doctors'));
       await tester.pumpAndSettle();
 
       expect(find.byType(PlaceholderScreen), findsOneWidget);
       expect(find.text('Coming Soon'), findsOneWidget);
-      expect(find.text('Medicines'), findsNWidgets(2)); // AppBar & body title
+      expect(find.text('Doctors'), findsNWidgets(2)); // AppBar & body title
     });
 
     testWidgets('bottom navigation switches between tabs',
@@ -181,6 +262,137 @@ void main() {
       expect(find.text('Syed Qizar'), findsNWidgets(2));
       expect(find.text('admin@medicalorder.com'), findsOneWidget);
       expect(find.text('Logout'), findsOneWidget);
+    });
+  });
+
+  group('Medicine Management Screens Tests', () {
+    testWidgets('MedicinesScreen renders list of medicines with search filter',
+        (WidgetTester tester) async {
+      const med1 = Medicine(
+        id: 'MED1',
+        name: 'Azithromycin',
+        brand: 'ABC Pharma',
+        composition: 'Azithromycin IP',
+        category: 'Antibiotic',
+        active: true,
+      );
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            medicinesStreamProvider.overrideWith((ref) => Stream.value([med1])),
+            medicineActiveVariantCountProvider('MED1')
+                .overrideWith((ref) => Stream.value(3)),
+          ],
+          child: const MaterialApp(
+            home: MedicinesScreen(),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      expect(find.text('Azithromycin'), findsOneWidget);
+      expect(find.text('ABC Pharma'), findsOneWidget);
+      expect(find.text('Azithromycin IP'), findsOneWidget);
+      expect(find.text('Antibiotic'), findsOneWidget);
+      expect(find.text('3 variants'), findsOneWidget);
+      expect(find.text('ACTIVE'), findsOneWidget);
+    });
+
+    testWidgets('AddMedicineScreen validates required form fields',
+        (WidgetTester tester) async {
+      await tester.pumpWidget(
+        const ProviderScope(
+          child: MaterialApp(
+            home: AddMedicineScreen(),
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('Create & Add Variants'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Please enter medicine name'), findsOneWidget);
+      expect(find.text('Please enter brand/manufacturer name'), findsOneWidget);
+      expect(find.text('Please enter active composition'), findsOneWidget);
+      expect(find.text('Please enter therapeutic category'), findsOneWidget);
+    });
+
+    testWidgets('MedicineDetailsScreen displays medicine info and variants list',
+        (WidgetTester tester) async {
+      const med = Medicine(
+        id: 'MED1',
+        name: 'Paracetamol',
+        brand: 'HealthCorp',
+        composition: 'Paracetamol 650mg',
+        category: 'Analgesic',
+        active: true,
+      );
+
+      const variant = MedicineVariant(
+        id: 'VAR1',
+        medicineId: 'MED1',
+        form: 'Tablet',
+        strength: '650 mg',
+        packSize: '15 tablets',
+        mrp: 35.0,
+        supplierPrice: 24.0,
+        active: true,
+      );
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            singleMedicineProvider('MED1').overrideWith((ref) => Stream.value(med)),
+            medicineVariantsProvider('MED1')
+                .overrideWith((ref) => Stream.value([variant])),
+          ],
+          child: const MaterialApp(
+            home: MedicineDetailsScreen(medicineId: 'MED1'),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      expect(find.text('Paracetamol'), findsOneWidget);
+      expect(find.text('HealthCorp'), findsOneWidget);
+      expect(find.text('Variants'), findsOneWidget);
+      expect(find.text('Tablet'), findsOneWidget);
+      expect(find.text('650 mg'), findsOneWidget);
+      expect(find.text('Pack Size: 15 tablets'), findsOneWidget);
+      expect(find.text('₹35.00'), findsOneWidget);
+      expect(find.text('₹24.00'), findsOneWidget);
+      expect(find.text('Edit'), findsOneWidget);
+      expect(find.text('Deactivate'), findsNWidgets(2)); // Medicine and variant
+    });
+
+    testWidgets('AddVariantDialog validates price constraints',
+        (WidgetTester tester) async {
+      await tester.pumpWidget(
+        const ProviderScope(
+          child: MaterialApp(
+            home: Scaffold(
+              body: AddVariantDialog(medicineId: 'MED1'),
+            ),
+          ),
+        ),
+      );
+
+      // Enter higher supplier price than MRP
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'MRP (₹) *'),
+        '50',
+      );
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Supplier Price (₹) *'),
+        '80',
+      );
+      await tester.tap(find.widgetWithText(ElevatedButton, 'Add Variant'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Cannot exceed MRP'), findsOneWidget);
     });
   });
 

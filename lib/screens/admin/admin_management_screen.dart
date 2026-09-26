@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'medicine/medicines_screen.dart';
 import 'placeholder_screen.dart';
 
 class AdminManagementScreen extends StatelessWidget {
@@ -55,13 +56,13 @@ class AdminManagementScreen extends StatelessWidget {
               subtitle: 'Manage catalog, compositions, and packaging variants',
               icon: Icons.medication_outlined,
               iconColor: const Color(0xFF0D9488),
-              onTap: () => _navigateToPlaceholder(
-                context,
-                sectionName: 'Medicines',
-                icon: Icons.medication_outlined,
-                description:
-                    'Create and edit parent medicines and individual dosage variants.',
-              ),
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const MedicinesScreen(),
+                  ),
+                );
+              },
             ),
             const SizedBox(height: 12),
             _ManagementTile(
