@@ -995,18 +995,17 @@ void main() {
   });
 
   group('Representative Dashboard Tests', () {
-    testWidgets(
-        'RepresentativeDashboardScreen displays required texts and logout button',
-        (WidgetTester tester) async {
-      const repUser = AppUser(
-        uid: 'rep_123',
-        name: 'John Representative',
-        email: 'rep@medicalorder.com',
-        role: 'medical_rep',
-        phone: '+919876543211',
-        active: true,
-      );
+    const repUser = AppUser(
+      uid: 'rep_123',
+      name: 'John Representative',
+      email: 'rep@medicalorder.com',
+      role: 'medical_rep',
+      phone: '+919876543211',
+      active: true,
+    );
 
+    testWidgets('RepresentativeDashboardScreen renders Home tab with welcome, action cards, and metrics',
+        (WidgetTester tester) async {
       await tester.pumpWidget(
         const ProviderScope(
           child: MaterialApp(
@@ -1015,11 +1014,84 @@ void main() {
         ),
       );
 
-      expect(find.text('Medical Representative Dashboard'),
-          findsNWidgets(2)); // AppBar and Body
-      expect(find.text('Logged in as Medical Representative'), findsOneWidget);
-      expect(find.text('John Representative'), findsOneWidget);
+      // Welcome banner & identity
+      expect(find.text('Medical Representative'), findsNWidgets(2)); // AppBar & banner badge
+      expect(find.text('Welcome, John Representative'), findsOneWidget);
+
+      // Actions
+      expect(find.text('Create New Order'), findsOneWidget);
+      expect(find.text('My Orders'), findsOneWidget);
+
+      // Metric placeholders
+      expect(find.text("Today's Orders"), findsOneWidget);
+      expect(find.text('Active Network'), findsOneWidget);
+      expect(find.text('Pending Delivery'), findsOneWidget);
+
+      // Tapping Create New Order shows placeholder dialog
+      await tester.tap(find.text('Create New Order'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Order creation will be available here.'), findsOneWidget);
+      await tester.tap(find.text('OK'));
+      await tester.pumpAndSettle();
+    });
+
+    testWidgets('bottom navigation switches between Home, Orders, and Profile tabs',
+        (WidgetTester tester) async {
+      await tester.pumpWidget(
+        const ProviderScope(
+          child: MaterialApp(
+            home: RepresentativeDashboardScreen(user: repUser),
+          ),
+        ),
+      );
+
+      // Initially on Home tab
+      expect(find.text('Create New Order'), findsOneWidget);
+
+      // Switch to Orders tab
+      await tester.tap(
+        find.descendant(
+          of: find.byType(NavigationBar),
+          matching: find.text('Orders'),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('My Orders'), findsOneWidget);
+      expect(find.text('No orders yet.'), findsOneWidget);
+
+      // Switch to Profile tab
+      await tester.tap(
+        find.descendant(
+          of: find.byType(NavigationBar),
+          matching: find.text('Profile'),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Account Information'), findsOneWidget);
+      expect(find.text('John Representative'), findsNWidgets(2)); // Header & row
+      expect(find.text('rep@medicalorder.com'), findsOneWidget);
+      expect(find.text('+919876543211'), findsOneWidget);
       expect(find.text('Logout'), findsOneWidget);
+    });
+
+    testWidgets('My Orders card in Home tab navigates to Orders tab',
+        (WidgetTester tester) async {
+      await tester.pumpWidget(
+        const ProviderScope(
+          child: MaterialApp(
+            home: RepresentativeDashboardScreen(user: repUser),
+          ),
+        ),
+      );
+
+      // Tap 'My Orders' card
+      await tester.tap(find.widgetWithText(Card, 'My Orders'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('No orders yet.'), findsOneWidget);
     });
   });
 
@@ -1168,8 +1240,8 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.byType(RepresentativeDashboardScreen), findsOneWidget);
-      expect(find.text('Medical Representative Dashboard'), findsNWidgets(2));
-      expect(find.text('Logged in as Medical Representative'), findsOneWidget);
+      expect(find.text('Medical Representative'), findsNWidgets(2));
+      expect(find.text('Welcome, Rep Bob'), findsOneWidget);
     });
   });
 }
