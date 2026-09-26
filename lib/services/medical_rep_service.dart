@@ -1,17 +1,16 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:cloud_functions/cloud_functions.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_core/firebase_core.dart';
 
+import '../firebase_options.dart';
 import '../models/medical_rep.dart';
 
 class MedicalRepService {
   final FirebaseFirestore _firestore;
-  final FirebaseFunctions _functions;
 
   MedicalRepService({
     FirebaseFirestore? firestore,
-    FirebaseFunctions? functions,
-  })  : _firestore = firestore ?? FirebaseFirestore.instance,
-        _functions = functions ?? FirebaseFunctions.instance;
+  }) : _firestore = firestore ?? FirebaseFirestore.instance;
 
   CollectionReference<Map<String, dynamic>> get _usersCollection =>
       _firestore.collection('users');
@@ -54,29 +53,83 @@ class MedicalRepService {
     });
   }
 
-  /// Provision a real Medical Representative account securely via Cloud Functions.
-  /// Server-side Admin SDK creates the Firebase Auth user and users/{UID} profile,
-  /// ensuring the currently logged-in administrator's session is never disrupted.
+  /// Provision a real Medical Representative account using a SECOND FirebaseAuth instance.
+  /// This runs on the 100% free Spark plan without requiring Cloud Functions or Blaze.
+  ///
+  /// CRITICAL ARCHITECTURAL GUARANTEE:
+  /// The currently logged-in administrator's primary [FirebaseAuth.instance] session
+  /// is never touched, signed out, or replaced.
   Future<String> provisionMedicalRep({
     required String name,
     required String email,
     required String phone,
     required String password,
   }) async {
-    final callable = _functions.httpsCallable('createMedicalRep');
-    final result = await callable.call<Map<String, dynamic>>({
-      'name': name.trim(),
-      'email': email.trim().toLowerCase(),
-      'phone': phone.trim(),
-      'password': password,
-    });
+    const secondaryAppName = 'repAccountCreation';
+    FirebaseApp secondaryApp;
 
-    final data = Map<String, dynamic>.from(result.data);
-    final uid = data['uid'] as String?;
-    if (uid == null || uid.isEmpty) {
-      throw Exception('Server did not return a valid user ID.');
+    // 1. Initialize or retrieve the secondary FirebaseApp
+    try {
+      secondaryApp = Firebase.app(secondaryAppName);
+    } catch (_) {
+      secondaryApp = await Firebase.initializeApp(
+        name: secondaryAppName,
+        options: DefaultFirebaseOptions.currentPlatform,
+      );
     }
-    return uid;
+
+    final secondaryAuth = FirebaseAuth.instanceFor(app: secondaryApp);
+    String? newUid;
+
+    try {
+      // 2. Create the representative account on the secondary Auth instance
+      final credential = await secondaryAuth.createUserWithEmailAndPassword(
+        email: email.trim().toLowerCase(),
+        password: password,
+      );
+
+      final user = credential.user;
+      if (user == null) {
+        throw FirebaseAuthException(
+          code: 'user-not-found',
+          message: 'Failed to obtain user details after account creation.',
+        );
+      }
+
+      newUid = user.uid;
+
+      // Update the representative's display name
+      try {
+        await user.updateDisplayName(name.trim());
+      } catch (_) {}
+
+      // 3. Create users/{UID} profile document in Firestore using primary Admin session
+      await _usersCollection.doc(newUid).set({
+        'name': name.trim(),
+        'email': email.trim().toLowerCase(),
+        'phone': phone.trim(),
+        'role': 'medical_rep',
+        'active': true,
+        'createdAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+
+      return newUid;
+    } catch (e) {
+      // Partial failure handling: if Auth user was created but Firestore failed,
+      // report error clearly without disturbing the Admin's session.
+      rethrow;
+    } finally {
+      // 4. Always sign out the secondary Auth instance
+      try {
+        await secondaryAuth.signOut();
+      } catch (_) {}
+
+      // 5. Cleanly delete the secondary FirebaseApp instance
+      try {
+        await secondaryApp.delete();
+      } catch (_) {}
+    }
   }
 
   /// Create a profile directly in Firestore (Stage 1 / fallback)

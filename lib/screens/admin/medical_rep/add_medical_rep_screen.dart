@@ -1,4 +1,4 @@
-import 'package:cloud_functions/cloud_functions.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -132,19 +132,21 @@ class _AddMedicalRepScreenState extends ConsumerState<AddMedicalRepScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text(
-              'Medical representative account provisioned successfully',
+              'Medical representative created successfully.',
             ),
           ),
         );
         Navigator.of(context).pop();
       }
-    } on FirebaseFunctionsException catch (e) {
+    } on FirebaseAuthException catch (e) {
       if (!mounted) return;
-      String message = e.message ?? 'Server error occurred during account provisioning.';
-      if (e.code == 'already-exists') {
-        message = 'An account with this email address already exists.';
-      } else if (e.code == 'unauthenticated' || e.code == 'permission-denied') {
-        message = 'Access denied. You must be an active administrator.';
+      String message = e.message ?? 'An error occurred while creating the account.';
+      if (e.code == 'email-already-in-use' || e.code == 'email-already-exists') {
+        message = 'This email is already registered.';
+      } else if (e.code == 'weak-password') {
+        message = 'The password is too weak. Please use at least 8 characters.';
+      } else if (e.code == 'invalid-email') {
+        message = 'Please enter a valid email address.';
       }
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -159,7 +161,7 @@ class _AddMedicalRepScreenState extends ConsumerState<AddMedicalRepScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Failed to provision representative: $e'),
+          content: Text('Failed to create representative: $e'),
           backgroundColor: Theme.of(context).colorScheme.error,
         ),
       );
