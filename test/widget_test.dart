@@ -851,14 +851,24 @@ void main() {
       );
 
       // Try submitting empty form
+      await tester.ensureVisible(find.widgetWithText(ElevatedButton, 'Create Representative'));
       await tester.tap(find.widgetWithText(ElevatedButton, 'Create Representative'));
       await tester.pumpAndSettle();
 
       expect(find.text('Please enter representative name'), findsOneWidget);
       expect(find.text('Please enter email address'), findsOneWidget);
       expect(find.text('Please enter phone number'), findsOneWidget);
+      expect(find.text('Please enter temporary password'), findsOneWidget);
 
-      // Enter invalid email and invalid phone
+      // Verify temporary password info note
+      expect(
+        find.text(
+          'This password is temporary. The representative should change it after receiving their login credentials.',
+        ),
+        findsOneWidget,
+      );
+
+      // Enter invalid email, invalid phone, and weak password
       await tester.enterText(
         find.widgetWithText(TextFormField, 'Full Name *'),
         'Rahul Sharma',
@@ -871,7 +881,12 @@ void main() {
         find.widgetWithText(TextFormField, 'Phone Number *'),
         '12345',
       );
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Temporary Password *'),
+        'short',
+      );
 
+      await tester.ensureVisible(find.widgetWithText(ElevatedButton, 'Create Representative'));
       await tester.tap(find.widgetWithText(ElevatedButton, 'Create Representative'));
       await tester.pumpAndSettle();
 
@@ -880,6 +895,13 @@ void main() {
         find.text('Please enter a valid 10-digit Indian phone number'),
         findsOneWidget,
       );
+      expect(find.text('Password must be at least 8 characters'), findsOneWidget);
+
+      // Toggle password visibility
+      expect(find.byIcon(Icons.visibility_outlined), findsOneWidget);
+      await tester.tap(find.byIcon(Icons.visibility_outlined));
+      await tester.pumpAndSettle();
+      expect(find.byIcon(Icons.visibility_off_outlined), findsOneWidget);
 
       // Clear name so form does not submit to remote service
       await tester.enterText(
@@ -887,7 +909,7 @@ void main() {
         '',
       );
 
-      // Enter valid email and valid 10-digit phone
+      // Enter valid email, valid phone, and valid password
       await tester.enterText(
         find.widgetWithText(TextFormField, 'Email Address *'),
         'valid.rep@med.com',
@@ -896,7 +918,12 @@ void main() {
         find.widgetWithText(TextFormField, 'Phone Number *'),
         '9876543210',
       );
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Temporary Password *'),
+        'SecurePassword123',
+      );
 
+      await tester.ensureVisible(find.widgetWithText(ElevatedButton, 'Create Representative'));
       await tester.tap(find.widgetWithText(ElevatedButton, 'Create Representative'));
       await tester.pumpAndSettle();
 
@@ -905,7 +932,32 @@ void main() {
         find.text('Please enter a valid 10-digit Indian phone number'),
         findsNothing,
       );
+      expect(find.text('Password must be at least 8 characters'), findsNothing);
       expect(find.text('Please enter representative name'), findsOneWidget);
+    });
+
+    testWidgets('AddMedicalRepScreen in Edit mode does not display password field',
+        (WidgetTester tester) async {
+      const rep = MedicalRep(
+        id: 'REP1',
+        name: 'Rahul Sharma',
+        email: 'rahul.sharma@med.com',
+        phone: '+919876543210',
+        active: true,
+      );
+
+      await tester.pumpWidget(
+        const ProviderScope(
+          child: MaterialApp(
+            home: AddMedicalRepScreen(initialRep: rep),
+          ),
+        ),
+      );
+
+      expect(find.text('Edit Representative'), findsOneWidget);
+      expect(find.text('Save Changes'), findsOneWidget);
+      expect(find.text('Temporary Password *'), findsNothing);
+      expect(find.widgetWithText(TextFormField, 'Full Name *'), findsOneWidget);
     });
 
     testWidgets('MedicalRepDetailsScreen displays representative details and deactivation option',
@@ -935,6 +987,8 @@ void main() {
       expect(find.text('pooja.verma@med.com'), findsOneWidget);
       expect(find.text('+919876543219'), findsOneWidget);
       expect(find.text('ACTIVE'), findsOneWidget);
+      expect(find.text('Firebase Auth Account Linked'), findsOneWidget);
+      expect(find.text('UID: REP1'), findsOneWidget);
       expect(find.text('Edit'), findsOneWidget);
       expect(find.text('Deactivate'), findsOneWidget);
     });

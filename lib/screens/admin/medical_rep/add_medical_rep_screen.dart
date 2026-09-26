@@ -1,3 +1,4 @@
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -22,6 +23,8 @@ class _AddMedicalRepScreenState extends ConsumerState<AddMedicalRepScreen> {
   late final TextEditingController _nameController;
   late final TextEditingController _emailController;
   late final TextEditingController _phoneController;
+  late final TextEditingController _passwordController;
+  bool _obscurePassword = true;
   bool _isLoading = false;
 
   bool get _isEditing => widget.initialRep != null;
@@ -35,6 +38,7 @@ class _AddMedicalRepScreenState extends ConsumerState<AddMedicalRepScreen> {
         TextEditingController(text: widget.initialRep?.email ?? '');
     _phoneController =
         TextEditingController(text: widget.initialRep?.phone ?? '');
+    _passwordController = TextEditingController();
   }
 
   @override
@@ -42,6 +46,7 @@ class _AddMedicalRepScreenState extends ConsumerState<AddMedicalRepScreen> {
     _nameController.dispose();
     _emailController.dispose();
     _phoneController.dispose();
+    _passwordController.dispose();
     super.dispose();
   }
 
@@ -70,7 +75,20 @@ class _AddMedicalRepScreenState extends ConsumerState<AddMedicalRepScreen> {
     return null;
   }
 
+  String? _validatePassword(String? value) {
+    if (_isEditing) return null; // Password not editable here
+    if (value == null || value.isEmpty) {
+      return 'Please enter temporary password';
+    }
+    if (value.length < 8) {
+      return 'Password must be at least 8 characters';
+    }
+    return null;
+  }
+
   Future<void> _handleSave() async {
+    if (_isLoading) return; // Prevent duplicate submissions
+
     if (!_formKey.currentState!.validate()) {
       return;
     }
@@ -98,25 +116,50 @@ class _AddMedicalRepScreenState extends ConsumerState<AddMedicalRepScreen> {
         );
         Navigator.of(context).pop();
       } else {
-        await service.createMedicalRepProfile(
+        final password = _passwordController.text;
+        // Call secure Cloud Function
+        await service.provisionMedicalRep(
           name: _nameController.text.trim(),
           email: _emailController.text.trim(),
           phone: _phoneController.text.trim(),
+          password: password,
         );
+
+        // Clear password immediately from memory/input
+        _passwordController.clear();
 
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Representative profile created successfully'),
+            content: Text(
+              'Medical representative account provisioned successfully',
+            ),
           ),
         );
         Navigator.of(context).pop();
       }
+    } on FirebaseFunctionsException catch (e) {
+      if (!mounted) return;
+      String message = e.message ?? 'Server error occurred during account provisioning.';
+      if (e.code == 'already-exists') {
+        message = 'An account with this email address already exists.';
+      } else if (e.code == 'unauthenticated' || e.code == 'permission-denied') {
+        message = 'Access denied. You must be an active administrator.';
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(message),
+          backgroundColor: Theme.of(context).colorScheme.error,
+        ),
+      );
+      setState(() {
+        _isLoading = false;
+      });
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Failed to save representative: $e'),
+          content: Text('Failed to provision representative: $e'),
           backgroundColor: Theme.of(context).colorScheme.error,
         ),
       );
@@ -145,59 +188,28 @@ class _AddMedicalRepScreenState extends ConsumerState<AddMedicalRepScreen> {
                 Text(
                   _isEditing
                       ? 'Update Representative Profile'
-                      : 'Create Representative Profile',
+                      : 'Provision Representative Account',
                   style: theme.textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.bold,
                   ),
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  'Manage medical representative profiles, contact info, and territory authorization.',
+                  _isEditing
+                      ? 'Update contact details for this medical representative.'
+                      : 'Create a secure Firebase Authentication account and database profile for field ordering.',
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: theme.colorScheme.onSurfaceVariant,
                   ),
                 ),
                 const SizedBox(height: 16),
 
-                // Stage 1 Notice Banner
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: theme.colorScheme.primaryContainer.withAlpha(80),
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(
-                      color: theme.colorScheme.primary.withAlpha(50),
-                    ),
-                  ),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Icon(
-                        Icons.info_outline,
-                        size: 20,
-                        color: theme.colorScheme.primary,
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          _isEditing
-                              ? 'Editing profile information in Firestore.'
-                              : 'Stage 1 creates the representative profile. Login credentials will be provisioned in Stage 2.',
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: theme.colorScheme.onPrimaryContainer,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 20),
-
                 // Name field
                 TextFormField(
                   controller: _nameController,
                   textInputAction: TextInputAction.next,
                   textCapitalization: TextCapitalization.words,
+                  enabled: !_isLoading,
                   decoration: const InputDecoration(
                     labelText: 'Full Name *',
                     hintText: 'e.g. Rahul Sharma',
@@ -218,6 +230,7 @@ class _AddMedicalRepScreenState extends ConsumerState<AddMedicalRepScreen> {
                   controller: _emailController,
                   keyboardType: TextInputType.emailAddress,
                   textInputAction: TextInputAction.next,
+                  enabled: !_isLoading,
                   decoration: const InputDecoration(
                     labelText: 'Email Address *',
                     hintText: 'e.g. rahul.sharma@med.com',
@@ -232,7 +245,9 @@ class _AddMedicalRepScreenState extends ConsumerState<AddMedicalRepScreen> {
                 TextFormField(
                   controller: _phoneController,
                   keyboardType: TextInputType.phone,
-                  textInputAction: TextInputAction.done,
+                  textInputAction:
+                      _isEditing ? TextInputAction.done : TextInputAction.next,
+                  enabled: !_isLoading,
                   decoration: const InputDecoration(
                     labelText: 'Phone Number *',
                     hintText: 'e.g. +91 9876543210 or 9876543210',
@@ -241,6 +256,68 @@ class _AddMedicalRepScreenState extends ConsumerState<AddMedicalRepScreen> {
                   ),
                   validator: _validatePhone,
                 ),
+
+                // Temporary Password field (Only in creation mode)
+                if (!_isEditing) ...[
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    controller: _passwordController,
+                    obscureText: _obscurePassword,
+                    textInputAction: TextInputAction.done,
+                    enabled: !_isLoading,
+                    decoration: InputDecoration(
+                      labelText: 'Temporary Password *',
+                      hintText: 'Minimum 8 characters',
+                      prefixIcon: const Icon(Icons.lock_outline),
+                      suffixIcon: IconButton(
+                        icon: Icon(
+                          _obscurePassword
+                              ? Icons.visibility_outlined
+                              : Icons.visibility_off_outlined,
+                        ),
+                        onPressed: () {
+                          setState(() {
+                            _obscurePassword = !_obscurePassword;
+                          });
+                        },
+                      ),
+                      border: const OutlineInputBorder(),
+                    ),
+                    validator: _validatePassword,
+                  ),
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.surfaceContainerHighest
+                          .withAlpha(120),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: theme.colorScheme.outlineVariant.withAlpha(80),
+                      ),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(
+                          Icons.info_outline,
+                          size: 18,
+                          color: theme.colorScheme.primary,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'This password is temporary. The representative should change it after receiving their login credentials.',
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+
                 const SizedBox(height: 32),
 
                 // Submit button

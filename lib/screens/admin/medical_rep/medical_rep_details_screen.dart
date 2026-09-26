@@ -260,7 +260,7 @@ class MedicalRepDetailsScreen extends ConsumerWidget {
                   ),
                   const SizedBox(height: 16),
 
-                  // Stage 1 Notice
+                  // Auth Linkage Notice
                   Card(
                     elevation: 0,
                     color: theme.colorScheme.surfaceContainerHighest
@@ -273,17 +273,31 @@ class MedicalRepDetailsScreen extends ConsumerWidget {
                       child: Row(
                         children: [
                           Icon(
-                            Icons.lock_outline,
+                            Icons.verified_user_outlined,
                             size: 22,
                             color: theme.colorScheme.primary,
                           ),
                           const SizedBox(width: 12),
                           Expanded(
-                            child: Text(
-                              'Profile record saved. Secure login credentials will be managed in Stage 2.',
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: theme.colorScheme.onSurfaceVariant,
-                              ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Firebase Auth Account Linked',
+                                  style: theme.textTheme.labelMedium?.copyWith(
+                                    fontWeight: FontWeight.bold,
+                                    color: theme.colorScheme.onSurface,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  'UID: ${rep.id}',
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: theme.colorScheme.onSurfaceVariant,
+                                    fontFamily: 'monospace',
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                         ],

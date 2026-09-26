@@ -1,12 +1,17 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 
 import '../models/medical_rep.dart';
 
 class MedicalRepService {
   final FirebaseFirestore _firestore;
+  final FirebaseFunctions _functions;
 
-  MedicalRepService({FirebaseFirestore? firestore})
-      : _firestore = firestore ?? FirebaseFirestore.instance;
+  MedicalRepService({
+    FirebaseFirestore? firestore,
+    FirebaseFunctions? functions,
+  })  : _firestore = firestore ?? FirebaseFirestore.instance,
+        _functions = functions ?? FirebaseFunctions.instance;
 
   CollectionReference<Map<String, dynamic>> get _usersCollection =>
       _firestore.collection('users');
@@ -49,9 +54,32 @@ class MedicalRepService {
     });
   }
 
-  /// Create a new medical representative profile in Firestore
-  /// Note: Stage 1 creates the profile document in the users collection.
-  /// Authentication credential creation will be handled in Stage 2.
+  /// Provision a real Medical Representative account securely via Cloud Functions.
+  /// Server-side Admin SDK creates the Firebase Auth user and users/{UID} profile,
+  /// ensuring the currently logged-in administrator's session is never disrupted.
+  Future<String> provisionMedicalRep({
+    required String name,
+    required String email,
+    required String phone,
+    required String password,
+  }) async {
+    final callable = _functions.httpsCallable('createMedicalRep');
+    final result = await callable.call<Map<String, dynamic>>({
+      'name': name.trim(),
+      'email': email.trim().toLowerCase(),
+      'phone': phone.trim(),
+      'password': password,
+    });
+
+    final data = Map<String, dynamic>.from(result.data);
+    final uid = data['uid'] as String?;
+    if (uid == null || uid.isEmpty) {
+      throw Exception('Server did not return a valid user ID.');
+    }
+    return uid;
+  }
+
+  /// Create a profile directly in Firestore (Stage 1 / fallback)
   Future<String> createMedicalRepProfile({
     required String name,
     required String email,
@@ -98,5 +126,10 @@ class MedicalRepService {
       'active': active,
       'updatedAt': FieldValue.serverTimestamp(),
     });
+  }
+
+  /// Safely remove a legacy Stage 1 test profile that has no associated Firebase Auth user
+  Future<void> deleteLegacyProfile(String id) async {
+    await _usersCollection.doc(id).delete();
   }
 }
