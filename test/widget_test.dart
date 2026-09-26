@@ -5,6 +5,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:medical_order_management/models/app_user.dart';
 import 'package:medical_order_management/providers/auth_provider.dart';
 import 'package:medical_order_management/screens/admin/admin_dashboard_screen.dart';
+import 'package:medical_order_management/screens/admin/admin_management_screen.dart';
+import 'package:medical_order_management/screens/admin/admin_orders_screen.dart';
+import 'package:medical_order_management/screens/admin/admin_profile_screen.dart';
+import 'package:medical_order_management/screens/admin/placeholder_screen.dart';
 import 'package:medical_order_management/screens/auth/auth_wrapper.dart';
 import 'package:medical_order_management/screens/auth/login_screen.dart';
 import 'package:medical_order_management/screens/representative/representative_dashboard_screen.dart';
@@ -71,18 +75,18 @@ void main() {
     });
   });
 
-  group('Role Dashboard Screens Tests', () {
-    testWidgets('AdminDashboardScreen displays required texts and logout button',
-        (WidgetTester tester) async {
-      const adminUser = AppUser(
-        uid: 'admin_123',
-        name: 'Dr. Jane Admin',
-        email: 'admin@medicalorder.com',
-        role: 'admin',
-        phone: '+919876543210',
-        active: true,
-      );
+  group('Admin Dashboard & Navigation Tests', () {
+    const adminUser = AppUser(
+      uid: 'admin_123',
+      name: 'Syed Qizar',
+      email: 'admin@medicalorder.com',
+      role: 'admin',
+      phone: '+919876543210',
+      active: true,
+    );
 
+    testWidgets('renders greeting with user name and module cards',
+        (WidgetTester tester) async {
       await tester.pumpWidget(
         const ProviderScope(
           child: MaterialApp(
@@ -91,12 +95,96 @@ void main() {
         ),
       );
 
-      expect(find.text('Admin Dashboard'), findsNWidgets(2)); // AppBar and Body
-      expect(find.text('Logged in as Admin'), findsOneWidget);
-      expect(find.text('Dr. Jane Admin'), findsOneWidget);
-      expect(find.text('Logout'), findsOneWidget);
+      // App title and greeting
+      expect(find.text('Medical Order Management'), findsOneWidget);
+      expect(find.text('Welcome, Syed Qizar'), findsOneWidget);
+
+      // Navigation Bar tabs
+      expect(find.text('Home'), findsOneWidget);
+      expect(find.text('Management'), findsOneWidget);
+      expect(find.text('Profile'), findsOneWidget);
+
+      // Section cards (Note: 'Orders' appears both on card and navigation bar)
+      expect(find.text('Orders'), findsNWidgets(2));
+      expect(find.text('Medicines'), findsOneWidget);
+      expect(find.text('Manage medicines and variants'), findsOneWidget);
+      expect(find.text('Doctors'), findsOneWidget);
+      expect(find.text('Manage doctors'), findsOneWidget);
+      expect(find.text('Chemists'), findsOneWidget);
+      expect(find.text('Manage chemist shops'), findsOneWidget);
+      expect(find.text('Representatives'), findsOneWidget);
+      expect(find.text('Manage representatives'), findsOneWidget);
+      expect(find.text('Reports'), findsOneWidget);
+      expect(find.text('View business/order reports'), findsOneWidget);
     });
 
+    testWidgets('tapping a dashboard card opens PlaceholderScreen with Coming Soon',
+        (WidgetTester tester) async {
+      await tester.pumpWidget(
+        const ProviderScope(
+          child: MaterialApp(
+            home: AdminDashboardScreen(user: adminUser),
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('Medicines'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(PlaceholderScreen), findsOneWidget);
+      expect(find.text('Coming Soon'), findsOneWidget);
+      expect(find.text('Medicines'), findsNWidgets(2)); // AppBar & body title
+    });
+
+    testWidgets('bottom navigation switches between tabs',
+        (WidgetTester tester) async {
+      await tester.pumpWidget(
+        const ProviderScope(
+          child: MaterialApp(
+            home: AdminDashboardScreen(user: adminUser),
+          ),
+        ),
+      );
+
+      // Switch to Orders tab via navigation bar
+      await tester.tap(
+        find.descendant(
+          of: find.byType(NavigationBar),
+          matching: find.text('Orders'),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.byType(AdminOrdersScreen), findsOneWidget);
+      expect(find.text('Orders Management'), findsOneWidget);
+      expect(find.text('Coming Soon'), findsOneWidget);
+
+      // Switch to Management tab via navigation bar
+      await tester.tap(
+        find.descendant(
+          of: find.byType(NavigationBar),
+          matching: find.text('Management'),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.byType(AdminManagementScreen), findsOneWidget);
+      expect(find.text('Master Directory'), findsOneWidget);
+
+      // Switch to Profile tab via navigation bar
+      await tester.tap(
+        find.descendant(
+          of: find.byType(NavigationBar),
+          matching: find.text('Profile'),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.byType(AdminProfileScreen), findsOneWidget);
+      expect(find.text('Syed Qizar'), findsNWidgets(2));
+      expect(find.text('admin@medicalorder.com'), findsOneWidget);
+      expect(find.text('Logout'), findsOneWidget);
+    });
+  });
+
+  group('Representative Dashboard Tests', () {
     testWidgets(
         'RepresentativeDashboardScreen displays required texts and logout button',
         (WidgetTester tester) async {
@@ -219,8 +307,8 @@ void main() {
               (ref) => Stream.value(
                 const AppUser(
                   uid: 'mock_uid',
-                  name: 'Admin Alice',
-                  email: 'alice@med.com',
+                  name: 'Syed Qizar',
+                  email: 'syed@med.com',
                   role: 'admin',
                   phone: '1234567890',
                   active: true,
@@ -237,8 +325,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.byType(AdminDashboardScreen), findsOneWidget);
-      expect(find.text('Admin Dashboard'), findsNWidgets(2));
-      expect(find.text('Logged in as Admin'), findsOneWidget);
+      expect(find.text('Welcome, Syed Qizar'), findsOneWidget);
     });
 
     testWidgets('routes to RepresentativeDashboardScreen when role is medical_rep',

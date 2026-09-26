@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/app_user.dart';
-import '../../providers/auth_provider.dart';
+import 'admin_home_screen.dart';
+import 'admin_management_screen.dart';
+import 'admin_orders_screen.dart';
+import 'admin_profile_screen.dart';
 
-class AdminDashboardScreen extends ConsumerWidget {
+class AdminDashboardScreen extends StatefulWidget {
   final AppUser user;
 
   const AdminDashboardScreen({
@@ -13,80 +15,55 @@ class AdminDashboardScreen extends ConsumerWidget {
   });
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final theme = Theme.of(context);
+  State<AdminDashboardScreen> createState() => _AdminDashboardScreenState();
+}
+
+class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
+  int _selectedIndex = 0;
+
+  @override
+  Widget build(BuildContext context) {
+    final screens = [
+      AdminHomeScreen(user: widget.user),
+      const AdminOrdersScreen(),
+      const AdminManagementScreen(),
+      AdminProfileScreen(user: widget.user),
+    ];
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Admin Dashboard'),
-        actions: [
-          IconButton(
-            tooltip: 'Logout',
-            icon: const Icon(Icons.logout),
-            onPressed: () async {
-              await ref.read(authServiceProvider).signOut();
-            },
+      body: IndexedStack(
+        index: _selectedIndex,
+        children: screens,
+      ),
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: _selectedIndex,
+        onDestinationSelected: (index) {
+          setState(() {
+            _selectedIndex = index;
+          });
+        },
+        destinations: const [
+          NavigationDestination(
+            icon: Icon(Icons.dashboard_outlined),
+            selectedIcon: Icon(Icons.dashboard),
+            label: 'Home',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.receipt_long_outlined),
+            selectedIcon: Icon(Icons.receipt_long),
+            label: 'Orders',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.business_center_outlined),
+            selectedIcon: Icon(Icons.business_center),
+            label: 'Management',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.person_outline),
+            selectedIcon: Icon(Icons.person),
+            label: 'Profile',
           ),
         ],
-      ),
-      body: SafeArea(
-        child: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24.0),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(
-                  Icons.admin_panel_settings_rounded,
-                  size: 72,
-                  color: theme.colorScheme.primary,
-                ),
-                const SizedBox(height: 24),
-                Text(
-                  'Admin Dashboard',
-                  style: theme.textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  'Logged in as Admin',
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    color: theme.colorScheme.primary,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-                if (user.name.isNotEmpty) ...[
-                  const SizedBox(height: 8),
-                  Text(
-                    user.name,
-                    style: theme.textTheme.bodyLarge?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                ],
-                const SizedBox(height: 32),
-                ElevatedButton.icon(
-                  onPressed: () async {
-                    await ref.read(authServiceProvider).signOut();
-                  },
-                  icon: const Icon(Icons.logout),
-                  label: const Text('Logout'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: theme.colorScheme.errorContainer,
-                    foregroundColor: theme.colorScheme.onErrorContainer,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 24,
-                      vertical: 12,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
       ),
     );
   }
