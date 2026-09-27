@@ -3965,6 +3965,370 @@ void main() {
       expect(find.text('Order Submitted'), findsOneWidget);
       expect(find.text(sampleOrder.orderNumber), findsOneWidget);
     });
+
+    testWidgets('Custom medicine dialog opens from AddMedicinesScreen and adds custom medicine to cart',
+        (tester) async {
+      final sampleDraft = OrderDraft(
+        doctor: const Doctor(
+          id: 'doc_1',
+          name: 'Dr. Test',
+          specialization: 'Physician',
+          phone: '9876543210',
+          active: true,
+        ),
+        chemist: const Chemist(
+          id: 'chm_1',
+          name: 'Test Chemist',
+          phone: '9876543210',
+          address: 'Test Address',
+          active: true,
+        ),
+      );
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            activeMedicinesStreamProvider.overrideWith(
+              (ref) => Stream.value([
+                const Medicine(
+                  id: 'med_1',
+                  name: 'Existing Med',
+                  brand: 'BrandA',
+                  composition: 'CompA',
+                  category: 'Tablet',
+                  active: true,
+                ),
+              ]),
+            ),
+          ],
+          child: MaterialApp(
+            home: AddMedicinesScreen(orderDraft: sampleDraft),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      // Find the Add Custom Medicine button in the catalog header
+      final customMedBtn = find.widgetWithText(OutlinedButton, 'Add Custom Medicine');
+      expect(customMedBtn, findsOneWidget);
+
+      await tester.tap(customMedBtn);
+      await tester.pumpAndSettle();
+
+      // Verify dialog is open
+      expect(find.byType(AlertDialog), findsOneWidget);
+      expect(find.text('Medicine Name *'), findsOneWidget);
+      expect(find.text('Quantity (units) *'), findsOneWidget);
+
+      // Try to submit with empty name
+      final addBtn = find.widgetWithText(ElevatedButton, 'Add to Cart');
+      await tester.tap(addBtn);
+      await tester.pumpAndSettle();
+      expect(find.text('Please enter medicine name'), findsOneWidget);
+
+      // Fill in custom medicine
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Medicine Name *'),
+        'Custom Cough Syrup',
+      );
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Brand (Optional)'),
+        'Apex Pharma',
+      );
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Composition (Optional)'),
+        'Dextromethorphan',
+      );
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Selling Price ₹ (Optional)'),
+        '85.50',
+      );
+
+      // Submit dialog
+      await tester.tap(addBtn);
+      await tester.pumpAndSettle();
+
+      // Verify dialog closed and cart contains custom item with CUSTOM badge
+      expect(find.text('Custom Cough Syrup'), findsOneWidget);
+      expect(find.text('CUSTOM'), findsOneWidget);
+      expect(find.textContaining('Apex Pharma'), findsOneWidget);
+      expect(find.text('Cart (1 items)'), findsOneWidget);
+    });
+
+    testWidgets('ReviewOrderScreen renders notes text field and submits order with notes',
+        (tester) async {
+      final sampleDraft = _createSampleDraft();
+      final fakeOrderService = _FakeOrderService();
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            orderServiceProvider.overrideWithValue(fakeOrderService),
+          ],
+          child: MaterialApp(
+            home: ReviewOrderScreen(orderDraft: sampleDraft),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      // Verify Notes section exists
+      await tester.ensureVisible(find.text('Order Notes (Optional)'));
+      expect(find.text('Order Notes (Optional)'), findsOneWidget);
+
+      // Enter notes
+      final notesField = find.byType(TextField);
+      expect(notesField, findsOneWidget);
+      await tester.enterText(notesField, 'Urgent delivery required before noon.');
+      await tester.pumpAndSettle();
+
+      // Tap submit order
+      await tester.ensureVisible(find.text('Submit Order'));
+      await tester.tap(find.text('Submit Order'));
+      await tester.pumpAndSettle();
+
+      // Verify notes appear in confirmation dialog
+      expect(find.text('Submit this order?'), findsOneWidget);
+      expect(find.text('Notes: '), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byType(AlertDialog),
+          matching: find.text('Urgent delivery required before noon.'),
+        ),
+        findsOneWidget,
+      );
+
+      // Cancel dialog
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+    });
+
+    test('OrderService createOrder preserves notes passed in draft or parameter', () async {
+      final fakeOrderService = _FakeOrderService();
+      final draftWithNotes = _createSampleDraft().copyWith(
+        notes: 'Urgent delivery required before noon.',
+      );
+      final order = await fakeOrderService.createOrder(draft: draftWithNotes);
+      expect(order.notes, equals('Urgent delivery required before noon.'));
+    });
+
+    testWidgets('AdminOrderDetailsScreen displays Order Notes and Custom Medicine badge',
+        (tester) async {
+      final customItem = const OrderItem(
+        medicineId: 'custom_123',
+        medicineName: 'Special Custom Herb',
+        brand: 'Ayur',
+        composition: 'Herbal 100mg',
+        variantId: 'var_custom',
+        form: 'Custom',
+        strength: '',
+        packSize: '1 unit',
+        mrp: 100.0,
+        supplierPrice: 80.0,
+        quantity: 3,
+        itemTotal: 240.0,
+        isCustom: true,
+      );
+
+      final sampleOrder = OrderModel(
+        id: 'ord_notes_test',
+        orderNumber: 'ORD-20260927-9999',
+        representative: {
+          'id': 'rep_1',
+          'name': 'Rahul Sharma',
+          'email': 'rahul@example.com',
+        },
+        doctor: {
+          'id': 'doc_1',
+          'name': 'Dr. Test',
+          'specialization': 'Physician',
+          'phone': '9876543210',
+        },
+        chemist: {
+          'id': 'chm_1',
+          'name': 'Test Chemist',
+          'phone': '9876543210',
+          'address': 'Test Address',
+        },
+        items: [customItem],
+        totalItems: 1,
+        totalQuantity: 3,
+        totalAmount: 240.0,
+        status: 'pending',
+        notes: 'Handle with cold storage delivery',
+        createdAt: DateTime(2026, 9, 27, 10, 0),
+        updatedAt: DateTime(2026, 9, 27, 10, 0),
+      );
+
+      final fakeOrderService = _FakeOrderService()..orders.add(sampleOrder);
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            orderServiceProvider.overrideWithValue(fakeOrderService),
+            singleOrderStreamProvider(sampleOrder.id).overrideWith(
+              (ref) => Stream.value(sampleOrder),
+            ),
+          ],
+          child: MaterialApp(
+            home: AdminOrderDetailsScreen(
+              orderId: sampleOrder.id,
+              initialOrder: sampleOrder,
+            ),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      // Verify Order Notes section is rendered
+      expect(find.text('ORDER NOTES / INSTRUCTIONS'), findsOneWidget);
+      expect(find.text('Handle with cold storage delivery'), findsOneWidget);
+
+      // Verify custom medicine badge
+      expect(find.text('Special Custom Herb'), findsOneWidget);
+      expect(find.text('CUSTOM'), findsOneWidget);
+      expect(find.text('Custom Medicine'), findsOneWidget);
+    });
+
+    testWidgets('RepresentativeOrderDetailsScreen displays Order Notes and Custom Medicine badge',
+        (tester) async {
+      final customItem = const OrderItem(
+        medicineId: 'custom_456',
+        medicineName: 'Special Syrup',
+        brand: 'MedBrand',
+        composition: 'Formula A',
+        variantId: 'var_custom_2',
+        form: 'Custom',
+        strength: '',
+        packSize: '1 unit',
+        mrp: 90.0,
+        supplierPrice: 70.0,
+        quantity: 2,
+        itemTotal: 140.0,
+        isCustom: true,
+      );
+
+      final sampleOrder = OrderModel(
+        id: 'ord_notes_rep_test',
+        orderNumber: 'ORD-20260927-8888',
+        representative: {
+          'id': 'rep_1',
+          'name': 'Rahul Sharma',
+          'email': 'rahul@example.com',
+        },
+        doctor: {
+          'id': 'doc_1',
+          'name': 'Dr. Test',
+          'specialization': 'Physician',
+          'phone': '9876543210',
+        },
+        chemist: {
+          'id': 'chm_1',
+          'name': 'Test Chemist',
+          'phone': '9876543210',
+          'address': 'Test Address',
+        },
+        items: [customItem],
+        totalItems: 1,
+        totalQuantity: 2,
+        totalAmount: 140.0,
+        status: 'pending',
+        notes: 'Priority chemist delivery order',
+        createdAt: DateTime(2026, 9, 27, 10, 0),
+        updatedAt: DateTime(2026, 9, 27, 10, 0),
+      );
+
+      final fakeOrderService = _FakeOrderService()..orders.add(sampleOrder);
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            orderServiceProvider.overrideWithValue(fakeOrderService),
+            singleOrderStreamProvider(sampleOrder.id).overrideWith(
+              (ref) => Stream.value(sampleOrder),
+            ),
+          ],
+          child: MaterialApp(
+            home: RepresentativeOrderDetailsScreen(
+              orderId: sampleOrder.id,
+              initialOrder: sampleOrder,
+            ),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      // Verify Order Notes section is rendered
+      expect(find.text('ORDER NOTES / INSTRUCTIONS'), findsOneWidget);
+      expect(find.text('Priority chemist delivery order'), findsOneWidget);
+
+      // Verify custom medicine badge
+      expect(find.text('Special Syrup'), findsOneWidget);
+      expect(find.text('CUSTOM'), findsOneWidget);
+    });
+
+    test('OrderPdfService generates valid PDF and excludes notes from generated document', () async {
+      const privateNote = 'SECRET_SUPPLIER_PRIVATE_NOTE_xyz';
+      final orderWithNotes = _createSampleOrder().copyWith(notes: privateNote);
+
+      final bytes = await OrderPdfService.generateOrderPdf(orderWithNotes);
+      final pdfString = String.fromCharCodes(bytes);
+
+      // Starts with PDF header
+      expect(pdfString.substring(0, 5), equals('%PDF-'));
+
+      // Verifies the notes text is NOT in the PDF document
+      expect(pdfString.contains(privateNote), isFalse);
+    });
+
+    test('OrderModel and OrderItem serialization preserves notes and isCustom', () {
+      final orderItem = const OrderItem(
+        medicineId: 'custom_789',
+        medicineName: 'Custom Tablet',
+        brand: 'XYZ',
+        composition: 'CompX',
+        variantId: 'custom_v_789',
+        form: 'Custom',
+        strength: '',
+        packSize: '1 unit',
+        mrp: 50.0,
+        supplierPrice: 40.0,
+        quantity: 2,
+        itemTotal: 80.0,
+        isCustom: true,
+      );
+
+      final itemMap = orderItem.toMap();
+      expect(itemMap['isCustom'], isTrue);
+
+      final deserializedItem = OrderItem.fromMap(itemMap);
+      expect(deserializedItem.isCustom, isTrue);
+      expect(deserializedItem.medicineName, equals('Custom Tablet'));
+
+      final order = OrderModel(
+        id: 'ord_test_model',
+        orderNumber: 'ORD-20260927-1111',
+        representative: {'id': 'rep_1', 'name': 'Rahul'},
+        doctor: {'id': 'doc_1', 'name': 'Dr. A'},
+        chemist: {'id': 'chm_1', 'name': 'Chemist B'},
+        items: [orderItem],
+        totalItems: 1,
+        totalQuantity: 2,
+        totalAmount: 80.0,
+        status: 'pending',
+        notes: 'Test representative notes for supplier',
+      );
+
+      final orderMap = order.toMap();
+      expect(orderMap['notes'], equals('Test representative notes for supplier'));
+
+      final deserializedOrder = OrderModel.fromFirestore(orderMap, 'ord_test_model');
+      expect(deserializedOrder.notes, equals('Test representative notes for supplier'));
+    });
   });
 }
 
@@ -4068,6 +4432,7 @@ class _FakeOrderService extends OrderService {
   @override
   Future<OrderModel> createOrder({
     required OrderDraft draft,
+    String? notes,
     AppUser? representativeProfile,
   }) async {
     submissionAttempts++;
@@ -4077,6 +4442,7 @@ class _FakeOrderService extends OrderService {
     if (shouldFail) {
       throw Exception('Network error');
     }
+    final effectiveNotes = (notes ?? draft.notes).trim();
     final order = OrderModel(
       id: 'ORDER_123',
       orderNumber: 'ORD-20260926-0001',
@@ -4102,6 +4468,7 @@ class _FakeOrderService extends OrderService {
       totalQuantity: draft.totalQuantity,
       totalAmount: draft.totalAmount,
       status: 'pending',
+      notes: effectiveNotes,
       createdAt: DateTime.now(),
       updatedAt: DateTime.now(),
     );

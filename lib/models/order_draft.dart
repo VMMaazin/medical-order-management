@@ -10,11 +10,13 @@ class OrderDraft {
   final Doctor doctor;
   final Chemist chemist;
   final List<OrderDraftItem> items;
+  final String notes;
 
   const OrderDraft({
     required this.doctor,
     required this.chemist,
     this.items = const [],
+    this.notes = '',
   });
 
   String get doctorId => doctor.id;
@@ -46,11 +48,13 @@ class OrderDraft {
     Doctor? doctor,
     Chemist? chemist,
     List<OrderDraftItem>? items,
+    String? notes,
   }) {
     return OrderDraft(
       doctor: doctor ?? this.doctor,
       chemist: chemist ?? this.chemist,
       items: items ?? this.items,
+      notes: notes ?? this.notes,
     );
   }
 }

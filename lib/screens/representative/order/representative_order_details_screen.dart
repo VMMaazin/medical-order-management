@@ -287,6 +287,78 @@ class _RepresentativeOrderDetailsScreenState
                   ),
                   const SizedBox(height: 20),
 
+                  // Order Notes (if present)
+                  if (displayOrder.notes.trim().isNotEmpty) ...[
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 8.0, left: 2.0),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.note_alt_outlined,
+                              size: 16, color: Color(0xFF0D9488)),
+                          const SizedBox(width: 6),
+                          const Text(
+                            'ORDER NOTES / INSTRUCTIONS',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: 0.5,
+                              color: Color(0xFF0F766E),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Card(
+                      elevation: 0,
+                      color: const Color(0xFFF59E0B).withAlpha(15),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        side: BorderSide(
+                          color: const Color(0xFFF59E0B).withAlpha(120),
+                        ),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.all(14.0),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Icon(
+                              Icons.description_outlined,
+                              size: 20,
+                              color: Color(0xFFD97706),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text(
+                                    'Notes to Supplier / Admin:',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 13,
+                                      color: Color(0xFFB45309),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    displayOrder.notes.trim(),
+                                    style: const TextStyle(
+                                      fontSize: 14,
+                                      color: Color(0xFF78350F),
+                                      height: 1.4,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                  ],
+
                   // Items List Header
                   Text(
                     'Order Items (${displayOrder.totalItems})',
@@ -327,16 +399,51 @@ class _RepresentativeOrderDetailsScreenState
                                       crossAxisAlignment:
                                           CrossAxisAlignment.start,
                                       children: [
-                                        Text(
-                                          item.medicineName,
-                                          style: const TextStyle(
-                                            fontWeight: FontWeight.bold,
-                                            fontSize: 15,
-                                          ),
+                                        Row(
+                                          children: [
+                                            Expanded(
+                                              child: Text(
+                                                item.medicineName,
+                                                style: const TextStyle(
+                                                  fontWeight: FontWeight.bold,
+                                                  fontSize: 15,
+                                                ),
+                                              ),
+                                            ),
+                                            if (item.isCustom)
+                                              Container(
+                                                margin: const EdgeInsets.only(
+                                                    left: 6, right: 8),
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                  horizontal: 6,
+                                                  vertical: 2,
+                                                ),
+                                                decoration: BoxDecoration(
+                                                  color: const Color(0xFF0D9488)
+                                                      .withAlpha(25),
+                                                  borderRadius:
+                                                      BorderRadius.circular(4),
+                                                  border: Border.all(
+                                                    color: const Color(0xFF0D9488),
+                                                    width: 0.8,
+                                                  ),
+                                                ),
+                                                child: const Text(
+                                                  'CUSTOM',
+                                                  style: TextStyle(
+                                                    fontSize: 10,
+                                                    fontWeight: FontWeight.bold,
+                                                    color: Color(0xFF0D9488),
+                                                    letterSpacing: 0.5,
+                                                  ),
+                                                ),
+                                              ),
+                                          ],
                                         ),
                                         const SizedBox(height: 2),
                                         Text(
-                                          '${item.brand} • ${item.composition}',
+                                          '${item.brand.isNotEmpty ? item.brand : (item.isCustom ? "Custom" : "")}${item.brand.isNotEmpty && item.composition.isNotEmpty ? " • " : ""}${item.composition}',
                                           style: TextStyle(
                                             fontSize: 12,
                                             color: theme

@@ -66,6 +66,7 @@ class OrderService {
   /// Create and submit a complete historical order to Firestore
   Future<OrderModel> createOrder({
     required OrderDraft draft,
+    String? notes,
     AppUser? representativeProfile,
   }) async {
     final currentUser = _auth.currentUser;
@@ -114,6 +115,7 @@ class OrderService {
       'address': draft.chemistAddress,
     };
 
+    final effectiveNotes = (notes ?? draft.notes).trim();
     final orderItems =
         draft.items.map((i) => OrderItem.fromDraftItem(i)).toList();
     final orderNumber = await generateOrderNumber();
@@ -128,6 +130,7 @@ class OrderService {
       'totalQuantity': draft.totalQuantity,
       'totalAmount': draft.totalAmount,
       'status': 'pending',
+      'notes': effectiveNotes,
       'createdAt': FieldValue.serverTimestamp(),
       'updatedAt': FieldValue.serverTimestamp(),
     };
@@ -145,6 +148,7 @@ class OrderService {
       totalQuantity: draft.totalQuantity,
       totalAmount: draft.totalAmount,
       status: 'pending',
+      notes: effectiveNotes,
       createdAt: DateTime.now(),
       updatedAt: DateTime.now(),
     );

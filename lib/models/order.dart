@@ -14,6 +14,7 @@ class OrderModel {
   final int totalQuantity;
   final double totalAmount;
   final String status;
+  final String notes;
   final DateTime? createdAt;
   final DateTime? updatedAt;
 
@@ -28,6 +29,7 @@ class OrderModel {
     required this.totalQuantity,
     required this.totalAmount,
     required this.status,
+    this.notes = '',
     this.createdAt,
     this.updatedAt,
   });
@@ -86,6 +88,7 @@ class OrderModel {
       totalQuantity: parseInt(data['totalQuantity']),
       totalAmount: parseNumeric(data['totalAmount']),
       status: data['status'] as String? ?? 'pending',
+      notes: data['notes'] as String? ?? '',
       createdAt: parseTimestamp(data['createdAt']),
       updatedAt: parseTimestamp(data['updatedAt']),
     );
@@ -102,8 +105,41 @@ class OrderModel {
       'totalQuantity': totalQuantity,
       'totalAmount': totalAmount,
       'status': status,
+      'notes': notes,
       if (forCreate) 'createdAt': FieldValue.serverTimestamp(),
       'updatedAt': FieldValue.serverTimestamp(),
     };
+  }
+
+  OrderModel copyWith({
+    String? id,
+    String? orderNumber,
+    Map<String, dynamic>? representative,
+    Map<String, dynamic>? doctor,
+    Map<String, dynamic>? chemist,
+    List<OrderItem>? items,
+    int? totalItems,
+    int? totalQuantity,
+    double? totalAmount,
+    String? status,
+    String? notes,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+  }) {
+    return OrderModel(
+      id: id ?? this.id,
+      orderNumber: orderNumber ?? this.orderNumber,
+      representative: representative ?? this.representative,
+      doctor: doctor ?? this.doctor,
+      chemist: chemist ?? this.chemist,
+      items: items ?? this.items,
+      totalItems: totalItems ?? this.totalItems,
+      totalQuantity: totalQuantity ?? this.totalQuantity,
+      totalAmount: totalAmount ?? this.totalAmount,
+      status: status ?? this.status,
+      notes: notes ?? this.notes,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+    );
   }
 }

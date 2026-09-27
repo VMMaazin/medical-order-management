@@ -127,6 +127,278 @@ class _AddMedicinesScreenState extends ConsumerState<AddMedicinesScreen> {
     );
   }
 
+  Future<void> _showCustomMedicineDialog({String? initialName}) async {
+    final formKey = GlobalKey<FormState>();
+    final nameController = TextEditingController(
+      text: initialName ?? (_searchQuery.isNotEmpty ? _searchController.text.trim() : ''),
+    );
+    final quantityController = TextEditingController(text: '1');
+    final brandController = TextEditingController();
+    final compositionController = TextEditingController();
+    final sellingPriceController = TextEditingController();
+    final mrpController = TextEditingController();
+
+    final added = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Row(
+          children: [
+            Icon(Icons.medication_liquid_outlined, color: Color(0xFF0D9488)),
+            SizedBox(width: 8),
+            Text('Add Custom Medicine'),
+          ],
+        ),
+        content: SizedBox(
+          width: 460,
+          child: SingleChildScrollView(
+            child: Form(
+              key: formKey,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF0D9488).withAlpha(15),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: const Color(0xFF0D9488).withAlpha(60),
+                      ),
+                    ),
+                    child: const Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(Icons.info_outline, size: 16, color: Color(0xFF0D9488)),
+                        SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            'Name and Quantity are required. Other fields are optional.',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Color(0xFF0F766E),
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+
+                  // 1. Medicine Name *
+                  TextFormField(
+                    controller: nameController,
+                    autofocus: true,
+                    textCapitalization: TextCapitalization.words,
+                    decoration: const InputDecoration(
+                      labelText: 'Medicine Name *',
+                      hintText: 'e.g. Paracetamol 650',
+                      prefixIcon: Icon(Icons.medication_outlined),
+                      border: OutlineInputBorder(),
+                    ),
+                    validator: (val) {
+                      if (val == null || val.trim().isEmpty) {
+                        return 'Please enter medicine name';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 12),
+
+                  // 2. Quantity *
+                  TextFormField(
+                    controller: quantityController,
+                    keyboardType: TextInputType.number,
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                    decoration: const InputDecoration(
+                      labelText: 'Quantity (units) *',
+                      hintText: 'e.g. 10',
+                      prefixIcon: Icon(Icons.numbers_outlined),
+                      border: OutlineInputBorder(),
+                    ),
+                    validator: (val) {
+                      if (val == null || val.trim().isEmpty) {
+                        return 'Please enter quantity';
+                      }
+                      final n = int.tryParse(val.trim());
+                      if (n == null || n < 1) {
+                        return 'Quantity must be at least 1';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 12),
+
+                  // 3. Brand & Composition (Optional)
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextFormField(
+                          controller: brandController,
+                          textCapitalization: TextCapitalization.words,
+                          decoration: const InputDecoration(
+                            labelText: 'Brand (Optional)',
+                            hintText: 'e.g. Cipla',
+                            border: OutlineInputBorder(),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: TextFormField(
+                          controller: compositionController,
+                          textCapitalization: TextCapitalization.words,
+                          decoration: const InputDecoration(
+                            labelText: 'Composition (Optional)',
+                            hintText: 'e.g. Paracetamol',
+                            border: OutlineInputBorder(),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+
+                  // 4. Selling / Supplier Price & MRP (Optional)
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextFormField(
+                          controller: sellingPriceController,
+                          keyboardType:
+                              const TextInputType.numberWithOptions(decimal: true),
+                          decoration: const InputDecoration(
+                            labelText: 'Selling Price ₹ (Optional)',
+                            hintText: '0.00',
+                            border: OutlineInputBorder(),
+                          ),
+                          validator: (val) {
+                            if (val != null && val.trim().isNotEmpty) {
+                              final p = double.tryParse(val.trim());
+                              if (p == null || p < 0) return 'Invalid price';
+                            }
+                            return null;
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: TextFormField(
+                          controller: mrpController,
+                          keyboardType:
+                              const TextInputType.numberWithOptions(decimal: true),
+                          decoration: const InputDecoration(
+                            labelText: 'MRP ₹ (Optional)',
+                            hintText: '0.00',
+                            border: OutlineInputBorder(),
+                          ),
+                          validator: (val) {
+                            if (val != null && val.trim().isNotEmpty) {
+                              final p = double.tryParse(val.trim());
+                              if (p == null || p < 0) return 'Invalid MRP';
+                            }
+                            return null;
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF0D9488),
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () {
+              if (formKey.currentState!.validate()) {
+                Navigator.of(ctx).pop(true);
+              }
+            },
+            child: const Text('Add to Cart'),
+          ),
+        ],
+      ),
+    );
+
+    if (added == true) {
+      final name = nameController.text.trim();
+      final qty = int.tryParse(quantityController.text.trim()) ?? 1;
+      final brand = brandController.text.trim();
+      final composition = compositionController.text.trim();
+      final sellingPrice =
+          double.tryParse(sellingPriceController.text.trim()) ?? 0.0;
+      final mrp = double.tryParse(mrpController.text.trim()) ??
+          (sellingPrice > 0 ? sellingPrice : 0.0);
+      final effectiveSellingPrice = sellingPrice > 0 ? sellingPrice : mrp;
+
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      final customItem = OrderDraftItem(
+        medicineId: 'custom_$timestamp',
+        medicineName: name,
+        brand: brand.isNotEmpty ? brand : 'Custom',
+        composition: composition,
+        variantId: 'custom_var_$timestamp',
+        form: 'Custom',
+        strength: '',
+        packSize: '1 unit',
+        mrp: mrp,
+        supplierPrice: effectiveSellingPrice,
+        quantity: qty,
+        isCustom: true,
+      );
+
+      final updatedItems = List<OrderDraftItem>.from(_currentDraft.items);
+      final existingIndex = updatedItems.indexWhere(
+        (item) =>
+            item.isCustom &&
+            item.medicineName.toLowerCase() == name.toLowerCase(),
+      );
+
+      if (existingIndex >= 0) {
+        final existing = updatedItems[existingIndex];
+        updatedItems[existingIndex] = existing.copyWith(
+          quantity: existing.quantity + qty,
+          supplierPrice: effectiveSellingPrice > 0
+              ? effectiveSellingPrice
+              : existing.supplierPrice,
+          mrp: mrp > 0 ? mrp : existing.mrp,
+          brand: brand.isNotEmpty ? brand : existing.brand,
+          composition:
+              composition.isNotEmpty ? composition : existing.composition,
+        );
+      } else {
+        updatedItems.add(customItem);
+      }
+
+      setState(() {
+        _currentDraft = _currentDraft.copyWith(items: updatedItems);
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Custom medicine "$name" added to cart.'),
+            backgroundColor: const Color(0xFF0D9488),
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    }
+  }
+
   void _navigateToReviewOrder() {
     if (_currentDraft.isEmpty) {
       ScaffoldMessenger.of(context).hideCurrentSnackBar();
@@ -262,12 +534,30 @@ class _AddMedicinesScreenState extends ConsumerState<AddMedicinesScreen> {
                     ),
                     const SizedBox(height: 16),
 
-                    // Medicines Header
-                    Text(
-                      'Medicines Catalog',
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
+                    // Medicines Header & Custom Medicine Action
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'Medicines Catalog',
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        OutlinedButton.icon(
+                          onPressed: () => _showCustomMedicineDialog(),
+                          icon: const Icon(Icons.add_circle_outline, size: 16),
+                          label: const Text('Add Custom Medicine'),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: const Color(0xFF0D9488),
+                            side: const BorderSide(color: Color(0xFF0D9488)),
+                            visualDensity: VisualDensity.compact,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 8),
 
@@ -299,14 +589,24 @@ class _AddMedicinesScreenState extends ConsumerState<AddMedicinesScreen> {
                                     .withAlpha(100),
                               ),
                             ),
-                            child: const Column(
+                            child: Column(
                               children: [
-                                Icon(Icons.medication_outlined,
+                                const Icon(Icons.medication_outlined,
                                     size: 40, color: Colors.grey),
-                                SizedBox(height: 8),
-                                Text(
+                                const SizedBox(height: 8),
+                                const Text(
                                   'No active medicines available.',
                                   style: TextStyle(fontWeight: FontWeight.w600),
+                                ),
+                                const SizedBox(height: 12),
+                                ElevatedButton.icon(
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: const Color(0xFF0D9488),
+                                    foregroundColor: Colors.white,
+                                  ),
+                                  onPressed: () => _showCustomMedicineDialog(),
+                                  icon: const Icon(Icons.add, size: 16),
+                                  label: const Text('Add Custom Medicine'),
                                 ),
                               ],
                             ),
@@ -335,14 +635,26 @@ class _AddMedicinesScreenState extends ConsumerState<AddMedicinesScreen> {
                                     .withAlpha(100),
                               ),
                             ),
-                            child: const Column(
+                            child: Column(
                               children: [
-                                Icon(Icons.search_off_rounded,
+                                const Icon(Icons.search_off_rounded,
                                     size: 40, color: Colors.grey),
-                                SizedBox(height: 8),
-                                Text(
+                                const SizedBox(height: 8),
+                                const Text(
                                   'No medicines found.',
                                   style: TextStyle(fontWeight: FontWeight.w600),
+                                ),
+                                const SizedBox(height: 12),
+                                ElevatedButton.icon(
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: const Color(0xFF0D9488),
+                                    foregroundColor: Colors.white,
+                                  ),
+                                  onPressed: () => _showCustomMedicineDialog(
+                                    initialName: _searchController.text.trim(),
+                                  ),
+                                  icon: const Icon(Icons.add, size: 16),
+                                  label: const Text('Add as Custom Medicine'),
                                 ),
                               ],
                             ),
@@ -556,16 +868,71 @@ class _AddMedicinesScreenState extends ConsumerState<AddMedicinesScreen> {
                                           crossAxisAlignment:
                                               CrossAxisAlignment.start,
                                           children: [
-                                            Text(
-                                              item.medicineName,
-                                              style: const TextStyle(
-                                                fontWeight: FontWeight.bold,
-                                                fontSize: 15,
-                                              ),
+                                            Row(
+                                              children: [
+                                                Expanded(
+                                                  child: Text(
+                                                    item.medicineName,
+                                                    style: const TextStyle(
+                                                      fontWeight: FontWeight.bold,
+                                                      fontSize: 15,
+                                                    ),
+                                                  ),
+                                                ),
+                                                if (item.isCustom)
+                                                  Container(
+                                                    margin: const EdgeInsets.only(
+                                                        left: 6, right: 8),
+                                                    padding:
+                                                        const EdgeInsets.symmetric(
+                                                      horizontal: 6,
+                                                      vertical: 2,
+                                                    ),
+                                                    decoration: BoxDecoration(
+                                                      color: const Color(0xFF0D9488)
+                                                          .withAlpha(25),
+                                                      borderRadius:
+                                                          BorderRadius.circular(4),
+                                                      border: Border.all(
+                                                        color: const Color(0xFF0D9488),
+                                                        width: 0.8,
+                                                      ),
+                                                    ),
+                                                    child: const Text(
+                                                      'CUSTOM',
+                                                      style: TextStyle(
+                                                        fontSize: 10,
+                                                        fontWeight: FontWeight.bold,
+                                                        color: Color(0xFF0D9488),
+                                                        letterSpacing: 0.5,
+                                                      ),
+                                                    ),
+                                                  ),
+                                              ],
                                             ),
                                             const SizedBox(height: 2),
                                             Text(
-                                              '${item.form} • ${item.strength} • ${item.packSize}',
+                                              item.isCustom
+                                                  ? ([
+                                                      if (item.brand.isNotEmpty &&
+                                                          item.brand != 'Custom')
+                                                        item.brand,
+                                                      if (item.composition.isNotEmpty)
+                                                        item.composition,
+                                                      if (item.mrp > 0)
+                                                        'MRP: ₹${item.mrp.toStringAsFixed(2)}',
+                                                    ].isNotEmpty
+                                                      ? [
+                                                          if (item.brand.isNotEmpty &&
+                                                              item.brand != 'Custom')
+                                                            item.brand,
+                                                          if (item.composition.isNotEmpty)
+                                                            item.composition,
+                                                          if (item.mrp > 0)
+                                                            'MRP: ₹${item.mrp.toStringAsFixed(2)}',
+                                                        ].join(' • ')
+                                                      : 'Custom Item')
+                                                  : '${item.form} • ${item.strength} • ${item.packSize}',
                                               style: TextStyle(
                                                 fontSize: 13,
                                                 color: theme.colorScheme
@@ -610,7 +977,9 @@ class _AddMedicinesScreenState extends ConsumerState<AddMedicinesScreen> {
                                         MainAxisAlignment.spaceBetween,
                                     children: [
                                       Text(
-                                        '₹${item.supplierPrice.toStringAsFixed(2)} × ${item.quantity}',
+                                        item.supplierPrice > 0
+                                            ? '₹${item.supplierPrice.toStringAsFixed(2)} × ${item.quantity}'
+                                            : 'Price pending × ${item.quantity}',
                                         style: TextStyle(
                                           fontSize: 13,
                                           fontWeight: FontWeight.w600,

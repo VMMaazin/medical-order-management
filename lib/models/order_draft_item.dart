@@ -14,6 +14,7 @@ class OrderDraftItem {
   final double mrp;
   final double supplierPrice;
   final int quantity;
+  final bool isCustom;
 
   const OrderDraftItem({
     required this.medicineId,
@@ -27,6 +28,7 @@ class OrderDraftItem {
     required this.mrp,
     required this.supplierPrice,
     required this.quantity,
+    this.isCustom = false,
   });
 
   /// Calculates total price for this cart item snapshot: supplierPrice * quantity
@@ -44,6 +46,7 @@ class OrderDraftItem {
     double? mrp,
     double? supplierPrice,
     int? quantity,
+    bool? isCustom,
   }) {
     return OrderDraftItem(
       medicineId: medicineId ?? this.medicineId,
@@ -57,6 +60,7 @@ class OrderDraftItem {
       mrp: mrp ?? this.mrp,
       supplierPrice: supplierPrice ?? this.supplierPrice,
       quantity: quantity ?? this.quantity,
+      isCustom: isCustom ?? this.isCustom,
     );
   }
 }

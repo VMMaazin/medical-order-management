@@ -14,6 +14,7 @@ class OrderItem {
   final double supplierPrice;
   final int quantity;
   final double itemTotal;
+  final bool isCustom;
 
   const OrderItem({
     required this.medicineId,
@@ -28,6 +29,7 @@ class OrderItem {
     required this.supplierPrice,
     required this.quantity,
     required this.itemTotal,
+    this.isCustom = false,
   });
 
   factory OrderItem.fromDraftItem(OrderDraftItem draftItem) {
@@ -44,6 +46,7 @@ class OrderItem {
       supplierPrice: draftItem.supplierPrice,
       quantity: draftItem.quantity,
       itemTotal: draftItem.itemTotal,
+      isCustom: draftItem.isCustom,
     );
   }
 
@@ -80,6 +83,8 @@ class OrderItem {
       supplierPrice: supplierPrice,
       quantity: quantity,
       itemTotal: itemTotal,
+      isCustom: data['isCustom'] as bool? ??
+          (data['medicineId']?.toString().startsWith('custom_') ?? false),
     );
   }
 
@@ -97,6 +102,7 @@ class OrderItem {
       'supplierPrice': supplierPrice,
       'quantity': quantity,
       'itemTotal': itemTotal,
+      'isCustom': isCustom,
     };
   }
 }

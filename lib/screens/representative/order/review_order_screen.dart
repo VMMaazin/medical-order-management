@@ -19,9 +19,24 @@ class ReviewOrderScreen extends ConsumerStatefulWidget {
 
 class _ReviewOrderScreenState extends ConsumerState<ReviewOrderScreen> {
   bool _isSubmitting = false;
+  late final TextEditingController _notesController;
+
+  @override
+  void initState() {
+    super.initState();
+    _notesController = TextEditingController(text: widget.orderDraft.notes);
+  }
+
+  @override
+  void dispose() {
+    _notesController.dispose();
+    super.dispose();
+  }
 
   Future<void> _handleSubmitPressed() async {
     if (_isSubmitting) return;
+
+    final notesText = _notesController.text.trim();
 
     final confirmed = await showDialog<bool>(
       context: context,
@@ -55,6 +70,35 @@ class _ReviewOrderScreenState extends ConsumerState<ReviewOrderScreen> {
                 color: Color(0xFF0F766E),
               ),
             ),
+            if (notesText.isNotEmpty) ...[
+              const SizedBox(height: 6),
+              const Divider(),
+              const SizedBox(height: 4),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Notes: ',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13,
+                    ),
+                  ),
+                  Expanded(
+                    child: Text(
+                      notesText,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontStyle: FontStyle.italic,
+                        color: Color(0xFF0F766E),
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ],
         ),
         actions: [
@@ -83,7 +127,11 @@ class _ReviewOrderScreenState extends ConsumerState<ReviewOrderScreen> {
 
     try {
       final orderService = ref.read(orderServiceProvider);
-      final order = await orderService.createOrder(draft: widget.orderDraft);
+      final updatedDraft = widget.orderDraft.copyWith(notes: notesText);
+      final order = await orderService.createOrder(
+        draft: updatedDraft,
+        notes: notesText,
+      );
 
       if (!mounted) return;
 
@@ -273,16 +321,71 @@ class _ReviewOrderScreenState extends ConsumerState<ReviewOrderScreen> {
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Text(
-                                      item.medicineName,
-                                      style: const TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 15,
-                                      ),
+                                    Row(
+                                      children: [
+                                        Expanded(
+                                          child: Text(
+                                            item.medicineName,
+                                            style: const TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 15,
+                                            ),
+                                          ),
+                                        ),
+                                        if (item.isCustom)
+                                          Container(
+                                            margin: const EdgeInsets.only(
+                                                left: 6, right: 8),
+                                            padding:
+                                                const EdgeInsets.symmetric(
+                                              horizontal: 6,
+                                              vertical: 2,
+                                            ),
+                                            decoration: BoxDecoration(
+                                              color: const Color(0xFF0D9488)
+                                                  .withAlpha(25),
+                                              borderRadius:
+                                                  BorderRadius.circular(4),
+                                              border: Border.all(
+                                                color: const Color(0xFF0D9488),
+                                                width: 0.8,
+                                              ),
+                                            ),
+                                            child: const Text(
+                                              'CUSTOM',
+                                              style: TextStyle(
+                                                fontSize: 10,
+                                                fontWeight: FontWeight.bold,
+                                                color: Color(0xFF0D9488),
+                                                letterSpacing: 0.5,
+                                              ),
+                                            ),
+                                          ),
+                                      ],
                                     ),
                                     const SizedBox(height: 2),
                                     Text(
-                                      '${item.brand} • ${item.composition}',
+                                      item.isCustom
+                                          ? ([
+                                              if (item.brand.isNotEmpty &&
+                                                  item.brand != 'Custom')
+                                                item.brand,
+                                              if (item.composition.isNotEmpty)
+                                                item.composition,
+                                              if (item.mrp > 0)
+                                                'MRP: ₹${item.mrp.toStringAsFixed(2)}',
+                                            ].isNotEmpty
+                                              ? [
+                                                  if (item.brand.isNotEmpty &&
+                                                      item.brand != 'Custom')
+                                                    item.brand,
+                                                  if (item.composition.isNotEmpty)
+                                                    item.composition,
+                                                  if (item.mrp > 0)
+                                                    'MRP: ₹${item.mrp.toStringAsFixed(2)}',
+                                                ].join(' • ')
+                                              : 'Custom Item')
+                                          : '${item.brand} • ${item.composition}',
                                       style: TextStyle(
                                         fontSize: 12,
                                         color:
@@ -318,7 +421,9 @@ class _ReviewOrderScreenState extends ConsumerState<ReviewOrderScreen> {
                                   borderRadius: BorderRadius.circular(6),
                                 ),
                                 child: Text(
-                                  '${item.form} • ${item.strength} • ${item.packSize}',
+                                  item.isCustom
+                                      ? 'Custom Medicine'
+                                      : '${item.form} • ${item.strength} • ${item.packSize}',
                                   style: TextStyle(
                                     fontSize: 12,
                                     color: theme.colorScheme.onSurfaceVariant,
@@ -326,7 +431,9 @@ class _ReviewOrderScreenState extends ConsumerState<ReviewOrderScreen> {
                                 ),
                               ),
                               Text(
-                                '₹${item.supplierPrice.toStringAsFixed(2)} × ${item.quantity}',
+                                item.supplierPrice > 0
+                                    ? '₹${item.supplierPrice.toStringAsFixed(2)} × ${item.quantity}'
+                                    : 'Price pending × ${item.quantity}',
                                 style: TextStyle(
                                   fontSize: 13,
                                   color: theme.colorScheme.onSurfaceVariant,
@@ -339,6 +446,73 @@ class _ReviewOrderScreenState extends ConsumerState<ReviewOrderScreen> {
                     ),
                   );
                 },
+              ),
+              const SizedBox(height: 20),
+
+              // Order Notes Section
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16.0),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.surface,
+                  borderRadius: BorderRadius.circular(14.0),
+                  border: Border.all(
+                    color: theme.colorScheme.outlineVariant.withAlpha(128),
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.edit_note_rounded,
+                          size: 20,
+                          color: Color(0xFF0D9488),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Order Notes (Optional)',
+                          style: theme.textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Add extra notes or instructions for the supplier / admin (e.g. delivery preferences, packaging details):',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: _notesController,
+                      maxLines: 3,
+                      minLines: 2,
+                      decoration: InputDecoration(
+                        hintText: 'Enter notes here...',
+                        hintStyle: TextStyle(
+                          fontSize: 13,
+                          color: Colors.grey.shade500,
+                        ),
+                        filled: true,
+                        fillColor: theme.colorScheme.surfaceContainerHighest
+                            .withAlpha(50),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: BorderSide(
+                            color: theme.colorScheme.outlineVariant
+                                .withAlpha(100),
+                          ),
+                        ),
+                        contentPadding: const EdgeInsets.all(12),
+                      ),
+                    ),
+                  ],
+                ),
               ),
               const SizedBox(height: 20),
 
