@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../models/order_draft.dart';
+import '../../../providers/order_provider.dart';
+import 'order_success_screen.dart';
 
-class ReviewOrderScreen extends StatelessWidget {
+class ReviewOrderScreen extends ConsumerStatefulWidget {
   final OrderDraft orderDraft;
 
   const ReviewOrderScreen({
@@ -10,34 +13,103 @@ class ReviewOrderScreen extends StatelessWidget {
     required this.orderDraft,
   });
 
-  void _showSubmissionPlaceholder(BuildContext context) {
-    showDialog(
+  @override
+  ConsumerState<ReviewOrderScreen> createState() => _ReviewOrderScreenState();
+}
+
+class _ReviewOrderScreenState extends ConsumerState<ReviewOrderScreen> {
+  bool _isSubmitting = false;
+
+  Future<void> _handleSubmitPressed() async {
+    if (_isSubmitting) return;
+
+    final confirmed = await showDialog<bool>(
       context: context,
+      barrierDismissible: false,
       builder: (ctx) => AlertDialog(
-        title: const Row(
+        title: const Text('Submit this order?'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(Icons.info_outline, color: Color(0xFF0D9488)),
-            SizedBox(width: 10),
-            Text('Submit Order'),
+            Text(
+              'Doctor: ${widget.orderDraft.doctorName}',
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Chemist: ${widget.orderDraft.chemistName}',
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 10),
+            const Divider(),
+            const SizedBox(height: 6),
+            Text('Total items: ${widget.orderDraft.totalItems}'),
+            const SizedBox(height: 4),
+            Text('Total quantity: ${widget.orderDraft.totalQuantity} units'),
+            const SizedBox(height: 4),
+            Text(
+              'Total amount: ₹${widget.orderDraft.totalAmount.toStringAsFixed(2)}',
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF0F766E),
+              ),
+            ),
           ],
-        ),
-        content: const Text(
-          'Order submission will be implemented in the next stage.',
-          style: TextStyle(fontSize: 15),
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('OK'),
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF0D9488),
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Submit'),
           ),
         ],
       ),
     );
+
+    if (confirmed != true) return;
+    if (!mounted) return;
+
+    setState(() {
+      _isSubmitting = true;
+    });
+
+    try {
+      final orderService = ref.read(orderServiceProvider);
+      final order = await orderService.createOrder(draft: widget.orderDraft);
+
+      if (!mounted) return;
+
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(
+          builder: (_) => OrderSuccessScreen(order: order),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isSubmitting = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to submit order: $e'),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final orderDraft = widget.orderDraft;
 
     return Scaffold(
       appBar: AppBar(
@@ -348,15 +420,30 @@ class ReviewOrderScreen extends StatelessWidget {
                 width: double.infinity,
                 height: 52,
                 child: ElevatedButton.icon(
-                  onPressed: () => _showSubmissionPlaceholder(context),
-                  icon: const Icon(Icons.send_rounded),
-                  label: const Text(
-                    'Submit Order',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  onPressed: _isSubmitting ? null : _handleSubmitPressed,
+                  icon: _isSubmitting
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Icon(Icons.send_rounded),
+                  label: Text(
+                    _isSubmitting ? 'Submitting Order...' : 'Submit Order',
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF0D9488),
                     foregroundColor: Colors.white,
+                    disabledBackgroundColor:
+                        const Color(0xFF0D9488).withAlpha(150),
+                    disabledForegroundColor: Colors.white,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
@@ -366,7 +453,7 @@ class ReviewOrderScreen extends StatelessWidget {
               const SizedBox(height: 12),
               Center(
                 child: Text(
-                  'Order draft is in-memory. No orders are written to Firestore.',
+                  'Order snapshot will be permanently saved to Firestore.',
                   style: TextStyle(
                     fontSize: 12,
                     color: theme.colorScheme.onSurfaceVariant,

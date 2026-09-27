@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/app_user.dart';
+import '../../providers/order_provider.dart';
 import 'representative_home_screen.dart';
 import 'representative_orders_screen.dart';
 import 'representative_profile_screen.dart';
 
-class RepresentativeDashboardScreen extends StatefulWidget {
+class RepresentativeDashboardScreen extends ConsumerWidget {
   final AppUser user;
 
   const RepresentativeDashboardScreen({
@@ -14,40 +16,38 @@ class RepresentativeDashboardScreen extends StatefulWidget {
   });
 
   @override
-  State<RepresentativeDashboardScreen> createState() =>
-      _RepresentativeDashboardScreenState();
-}
+  Widget build(BuildContext context, WidgetRef ref) {
+    final selectedIndex = ref.watch(representativeTabProvider);
 
-class _RepresentativeDashboardScreenState
-    extends State<RepresentativeDashboardScreen> {
-  int _selectedIndex = 0;
-
-  @override
-  Widget build(BuildContext context) {
     final screens = [
       RepresentativeHomeScreen(
-        user: widget.user,
+        user: user,
         onNavigateToOrders: () {
-          setState(() {
-            _selectedIndex = 1;
-          });
+          ref.read(representativeOrderStatusFilterProvider.notifier).reset();
+          ref.read(representativeTabProvider.notifier).setTab(1);
+        },
+        onNavigateToOrdersWithFilter: (status) {
+          if (status != null) {
+            ref
+                .read(representativeOrderStatusFilterProvider.notifier)
+                .setFilter(status);
+          }
+          ref.read(representativeTabProvider.notifier).setTab(1);
         },
       ),
       const RepresentativeOrdersScreen(),
-      RepresentativeProfileScreen(user: widget.user),
+      RepresentativeProfileScreen(user: user),
     ];
 
     return Scaffold(
       body: IndexedStack(
-        index: _selectedIndex,
+        index: selectedIndex,
         children: screens,
       ),
       bottomNavigationBar: NavigationBar(
-        selectedIndex: _selectedIndex,
+        selectedIndex: selectedIndex,
         onDestinationSelected: (index) {
-          setState(() {
-            _selectedIndex = index;
-          });
+          ref.read(representativeTabProvider.notifier).setTab(index);
         },
         destinations: const [
           NavigationDestination(
@@ -70,3 +70,4 @@ class _RepresentativeDashboardScreenState
     );
   }
 }
+

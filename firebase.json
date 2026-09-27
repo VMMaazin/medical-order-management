@@ -1,1 +1,24 @@
-{"flutter":{"platforms":{"android":{"default":{"projectId":"medical-order-management","appId":"1:737325074723:android:3a087b3bf680bda5e76496","fileOutput":"android/app/google-services.json"}},"dart":{"lib/firebase_options.dart":{"projectId":"medical-order-management","configurations":{"android":"1:737325074723:android:3a087b3bf680bda5e76496"}}}}}}
+{
+  "firestore": {
+    "rules": "firestore.rules"
+  },
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "medical-order-management",
+          "appId": "1:737325074723:android:3a087b3bf680bda5e76496",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "medical-order-management",
+          "configurations": {
+            "android": "1:737325074723:android:3a087b3bf680bda5e76496"
+          }
+        }
+      }
+    }
+  }
+}

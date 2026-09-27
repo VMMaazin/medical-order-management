@@ -46,7 +46,7 @@ class _AddChemistScreenState extends ConsumerState<AddChemistScreen> {
 
   String? _validatePhone(String? value) {
     if (value == null || value.trim().isEmpty) {
-      return 'Please enter phone number';
+      return null; // Phone is optional
     }
     final cleaned = value.replaceAll(RegExp(r'[\s\-\(\)]'), '');
     final regex = RegExp(r'^(?:(?:\+?91)|0)?[6-9]\d{9}$');
@@ -166,7 +166,7 @@ class _AddChemistScreenState extends ConsumerState<AddChemistScreen> {
                   keyboardType: TextInputType.phone,
                   textInputAction: TextInputAction.next,
                   decoration: const InputDecoration(
-                    labelText: 'Phone Number *',
+                    labelText: 'Phone Number (Optional)',
                     hintText: 'e.g. +91 9876543210 or 9876543210',
                     prefixIcon: Icon(Icons.phone_outlined),
                     border: OutlineInputBorder(),
@@ -175,24 +175,18 @@ class _AddChemistScreenState extends ConsumerState<AddChemistScreen> {
                 ),
                 const SizedBox(height: 16),
 
-                // Address field
+                // Address field (optional)
                 TextFormField(
                   controller: _addressController,
                   textInputAction: TextInputAction.done,
                   maxLines: 3,
                   decoration: const InputDecoration(
-                    labelText: 'Address *',
+                    labelText: 'Address (Optional)',
                     hintText: 'e.g. Shop #4, Gandhi Road, Mumbai, Maharashtra - 400001',
                     prefixIcon: Icon(Icons.location_on_outlined),
                     border: OutlineInputBorder(),
                     alignLabelWithHint: true,
                   ),
-                  validator: (value) {
-                    if (value == null || value.trim().isEmpty) {
-                      return 'Please enter address';
-                    }
-                    return null;
-                  },
                 ),
                 const SizedBox(height: 32),
 

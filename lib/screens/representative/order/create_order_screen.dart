@@ -74,26 +74,213 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen>
     });
   }
 
+  void _onSkipDoctor() {
+    setState(() {
+      _selectedDoctor = const Doctor(
+        id: 'skipped',
+        name: 'Direct Order (No Doctor)',
+        specialization: '',
+        phone: '',
+        active: true,
+      );
+    });
+
+    // Auto-advance to Chemist tab
+    if (_tabController.index == 0) {
+      _tabController.animateTo(1);
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Doctor skipped. Now select or enter a chemist.'),
+        duration: Duration(seconds: 2),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  Future<void> _showCustomDoctorDialog() async {
+    final textController = TextEditingController();
+    final formKey = GlobalKey<FormState>();
+
+    final customName = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.person_add_alt_1_outlined, color: Color(0xFF0D9488)),
+            SizedBox(width: 8),
+            Text('Custom Doctor'),
+          ],
+        ),
+        content: Form(
+          key: formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Enter doctor name if not available in the list:',
+                style: TextStyle(fontSize: 13, color: Colors.grey),
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: textController,
+                autofocus: true,
+                textCapitalization: TextCapitalization.words,
+                decoration: const InputDecoration(
+                  labelText: 'Doctor Name *',
+                  hintText: 'e.g. Dr. Rajesh Kumar',
+                  prefixIcon: Icon(Icons.person_outline),
+                  border: OutlineInputBorder(),
+                ),
+                validator: (val) {
+                  if (val == null || val.trim().isEmpty) {
+                    return 'Please enter doctor name';
+                  }
+                  return null;
+                },
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF0D9488),
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () {
+              if (formKey.currentState!.validate()) {
+                Navigator.of(ctx).pop(textController.text.trim());
+              }
+            },
+            child: const Text('Use Doctor'),
+          ),
+        ],
+      ),
+    );
+
+    if (customName != null && customName.isNotEmpty) {
+      setState(() {
+        _selectedDoctor = Doctor(
+          id: 'custom_${DateTime.now().millisecondsSinceEpoch}',
+          name: customName,
+          specialization: 'Custom Doctor',
+          phone: '',
+          active: true,
+        );
+      });
+
+      if (_selectedChemist == null && _tabController.index == 0) {
+        _tabController.animateTo(1);
+      }
+    }
+  }
+
+  Future<void> _showCustomChemistDialog() async {
+    final textController = TextEditingController();
+    final formKey = GlobalKey<FormState>();
+
+    final customName = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.storefront_outlined, color: Color(0xFF0284C7)),
+            SizedBox(width: 8),
+            Text('Custom Chemist'),
+          ],
+        ),
+        content: Form(
+          key: formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Enter chemist or pharmacy name (no address or phone required):',
+                style: TextStyle(fontSize: 13, color: Colors.grey),
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: textController,
+                autofocus: true,
+                textCapitalization: TextCapitalization.words,
+                decoration: const InputDecoration(
+                  labelText: 'Chemist Name *',
+                  hintText: 'e.g. Apollo Pharmacy',
+                  prefixIcon: Icon(Icons.storefront_outlined),
+                  border: OutlineInputBorder(),
+                ),
+                validator: (val) {
+                  if (val == null || val.trim().isEmpty) {
+                    return 'Please enter chemist name';
+                  }
+                  return null;
+                },
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF0284C7),
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () {
+              if (formKey.currentState!.validate()) {
+                Navigator.of(ctx).pop(textController.text.trim());
+              }
+            },
+            child: const Text('Use Chemist'),
+          ),
+        ],
+      ),
+    );
+
+    if (customName != null && customName.isNotEmpty) {
+      setState(() {
+        _selectedChemist = Chemist(
+          id: 'custom_${DateTime.now().millisecondsSinceEpoch}',
+          name: customName,
+          phone: '',
+          address: '',
+          active: true,
+        );
+      });
+    }
+  }
+
+  void _onClearDoctor() {
+    setState(() {
+      _selectedDoctor = null;
+    });
+  }
+
+  void _onClearChemist() {
+    setState(() {
+      _selectedChemist = null;
+    });
+  }
+
   void _handleContinueTap() {
     ScaffoldMessenger.of(context).hideCurrentSnackBar();
-
-    if (_selectedDoctor == null) {
-      _tabController.animateTo(0);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please select a doctor to continue.'),
-          backgroundColor: Colors.redAccent,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-      return;
-    }
 
     if (_selectedChemist == null) {
       _tabController.animateTo(1);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Please select a chemist to continue.'),
+          content: Text('Please select or enter a chemist to continue.'),
           backgroundColor: Colors.redAccent,
           behavior: SnackBarBehavior.floating,
         ),
@@ -101,9 +288,18 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen>
       return;
     }
 
-    // Both selected -> navigate to Add Medicines placeholder
+    // Doctor is optional. If not selected, set as Direct Order
+    final effectiveDoctor = _selectedDoctor ??
+        const Doctor(
+          id: 'skipped',
+          name: 'Direct Order (No Doctor)',
+          specialization: '',
+          phone: '',
+          active: true,
+        );
+
     final orderDraft = OrderDraft(
-      doctor: _selectedDoctor!,
+      doctor: effectiveDoctor,
       chemist: _selectedChemist!,
     );
 
@@ -117,8 +313,7 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen>
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final isReadyToContinue =
-        _selectedDoctor != null && _selectedChemist != null;
+    final isReadyToContinue = _selectedChemist != null;
 
     final doctorsAsync = ref.watch(activeDoctorsStreamProvider);
     final chemistsAsync = ref.watch(activeChemistsStreamProvider);
@@ -218,7 +413,7 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen>
                                   child: Text(
                                     _selectedDoctor != null
                                         ? _selectedDoctor!.name
-                                        : 'Doctor required',
+                                        : 'Doctor (Optional)',
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                     style: TextStyle(
@@ -274,7 +469,7 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen>
                                   child: Text(
                                     _selectedChemist != null
                                         ? _selectedChemist!.name
-                                        : 'Chemist required',
+                                        : 'Chemist required *',
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                     style: TextStyle(
@@ -329,6 +524,9 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen>
                     doctorsAsync: doctorsAsync,
                     selectedDoctor: _selectedDoctor,
                     onDoctorSelected: _onDoctorSelected,
+                    onCustomDoctorPressed: _showCustomDoctorDialog,
+                    onSkipDoctorPressed: _onSkipDoctor,
+                    onClearDoctorPressed: _onClearDoctor,
                   ),
 
                   // Tab 2: Chemist Selection
@@ -338,6 +536,8 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen>
                     chemistsAsync: chemistsAsync,
                     selectedChemist: _selectedChemist,
                     onChemistSelected: _onChemistSelected,
+                    onCustomChemistPressed: _showCustomChemistDialog,
+                    onClearChemistPressed: _onClearChemist,
                   ),
                 ],
               ),
@@ -370,7 +570,8 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen>
                     style: ElevatedButton.styleFrom(
                       backgroundColor: isReadyToContinue
                           ? const Color(0xFF0D9488)
-                          : theme.colorScheme.surfaceContainerHighest.withAlpha(160),
+                          : theme.colorScheme.surfaceContainerHighest
+                              .withAlpha(160),
                       foregroundColor: isReadyToContinue
                           ? Colors.white
                           : theme.colorScheme.onSurfaceVariant.withAlpha(160),
@@ -389,7 +590,8 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen>
                             fontWeight: FontWeight.bold,
                             color: isReadyToContinue
                                 ? Colors.white
-                                : theme.colorScheme.onSurfaceVariant.withAlpha(160),
+                                : theme.colorScheme.onSurfaceVariant
+                                    .withAlpha(160),
                           ),
                         ),
                         const SizedBox(width: 8),
@@ -398,7 +600,8 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen>
                           size: 18,
                           color: isReadyToContinue
                               ? Colors.white
-                              : theme.colorScheme.onSurfaceVariant.withAlpha(160),
+                              : theme.colorScheme.onSurfaceVariant
+                                  .withAlpha(160),
                         ),
                       ],
                     ),
@@ -419,6 +622,9 @@ class _DoctorSelectionTab extends StatelessWidget {
   final AsyncValue<List<Doctor>> doctorsAsync;
   final Doctor? selectedDoctor;
   final ValueChanged<Doctor> onDoctorSelected;
+  final VoidCallback onCustomDoctorPressed;
+  final VoidCallback onSkipDoctorPressed;
+  final VoidCallback onClearDoctorPressed;
 
   const _DoctorSelectionTab({
     required this.searchController,
@@ -426,6 +632,9 @@ class _DoctorSelectionTab extends StatelessWidget {
     required this.doctorsAsync,
     required this.selectedDoctor,
     required this.onDoctorSelected,
+    required this.onCustomDoctorPressed,
+    required this.onSkipDoctorPressed,
+    required this.onClearDoctorPressed,
   });
 
   @override
@@ -434,9 +643,120 @@ class _DoctorSelectionTab extends StatelessWidget {
 
     return Column(
       children: [
+        // Custom Doctor & Skip Doctor Options at the top
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16.0, 12.0, 16.0, 4.0),
+          child: Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: onCustomDoctorPressed,
+                  icon: const Icon(Icons.person_add_alt_1_outlined, size: 18),
+                  label: const Text('Custom Doctor',
+                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFF0D9488),
+                    side: const BorderSide(color: Color(0xFF0D9488)),
+                    padding: const EdgeInsets.symmetric(
+                        vertical: 10, horizontal: 8),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: onSkipDoctorPressed,
+                  icon: const Icon(Icons.skip_next_outlined, size: 18),
+                  label: const Text('Skip Doctor',
+                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.orange.shade800,
+                    side: BorderSide(color: Colors.orange.shade400),
+                    padding: const EdgeInsets.symmetric(
+                        vertical: 10, horizontal: 8),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        // Selected Doctor Banner (if selected or skipped)
+        if (selectedDoctor != null)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16.0, 6.0, 16.0, 4.0),
+            child: Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
+              decoration: BoxDecoration(
+                color: const Color(0xFF0D9488).withAlpha(20),
+                borderRadius: BorderRadius.circular(10),
+                border:
+                    Border.all(color: const Color(0xFF0D9488).withAlpha(120)),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    selectedDoctor!.id.startsWith('custom')
+                        ? Icons.person_outline
+                        : (selectedDoctor!.id == 'skipped'
+                            ? Icons.skip_next
+                            : Icons.check_circle),
+                    color: const Color(0xFF0D9488),
+                    size: 18,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          selectedDoctor!.id.startsWith('custom')
+                              ? 'Custom Doctor Selected'
+                              : (selectedDoctor!.id == 'skipped'
+                                  ? 'Doctor Skipped (Direct Order)'
+                                  : 'Doctor Selected'),
+                          style: const TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF0F766E),
+                          ),
+                        ),
+                        Text(
+                          selectedDoctor!.name,
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF0F766E),
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: onClearDoctorPressed,
+                    style: TextButton.styleFrom(
+                      visualDensity: VisualDensity.compact,
+                      foregroundColor: Colors.redAccent,
+                    ),
+                    child: const Text('Change', style: TextStyle(fontSize: 12)),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
         // Doctor Search Box
         Padding(
-          padding: const EdgeInsets.fromLTRB(16.0, 16.0, 16.0, 8.0),
+          padding: const EdgeInsets.fromLTRB(16.0, 8.0, 16.0, 8.0),
           child: TextField(
             controller: searchController,
             decoration: InputDecoration(
@@ -449,7 +769,8 @@ class _DoctorSelectionTab extends StatelessWidget {
                     )
                   : null,
               filled: true,
-              fillColor: theme.colorScheme.surfaceContainerHighest.withAlpha(60),
+              fillColor:
+                  theme.colorScheme.surfaceContainerHighest.withAlpha(60),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
                 borderSide: BorderSide(
@@ -483,21 +804,22 @@ class _DoctorSelectionTab extends StatelessWidget {
 
               if (activeDoctors.isEmpty) {
                 return Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(24.0),
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.all(16.0),
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
+                      mainAxisSize: MainAxisSize.min,
                       children: [
                         Icon(
                           Icons.person_off_outlined,
-                          size: 48,
+                          size: 40,
                           color: theme.colorScheme.outline,
                         ),
-                        const SizedBox(height: 12),
+                        const SizedBox(height: 8),
                         const Text(
                           'No active doctors available.',
                           style: TextStyle(
-                            fontSize: 16,
+                            fontSize: 15,
                             fontWeight: FontWeight.w600,
                           ),
                         ),
@@ -517,21 +839,22 @@ class _DoctorSelectionTab extends StatelessWidget {
 
               if (filteredDoctors.isEmpty) {
                 return Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(24.0),
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.all(16.0),
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
+                      mainAxisSize: MainAxisSize.min,
                       children: [
                         Icon(
                           Icons.search_off_rounded,
-                          size: 48,
+                          size: 40,
                           color: theme.colorScheme.outline,
                         ),
-                        const SizedBox(height: 12),
+                        const SizedBox(height: 8),
                         const Text(
                           'No doctors found.',
                           style: TextStyle(
-                            fontSize: 16,
+                            fontSize: 15,
                             fontWeight: FontWeight.w600,
                           ),
                         ),
@@ -602,34 +925,39 @@ class _DoctorSelectionTab extends StatelessWidget {
                                           : theme.colorScheme.onSurface,
                                     ),
                                   ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    doctor.specialization,
-                                    style: theme.textTheme.bodyMedium?.copyWith(
-                                      color: const Color(0xFF0D9488),
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 2),
-                                  Row(
-                                    children: [
-                                      Icon(
-                                        Icons.phone_outlined,
-                                        size: 14,
-                                        color:
-                                            theme.colorScheme.onSurfaceVariant,
+                                  if (doctor.specialization.isNotEmpty) ...[
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      doctor.specialization,
+                                      style:
+                                          theme.textTheme.bodyMedium?.copyWith(
+                                        color: const Color(0xFF0D9488),
+                                        fontWeight: FontWeight.w600,
                                       ),
-                                      const SizedBox(width: 4),
-                                      Text(
-                                        doctor.phone,
-                                        style:
-                                            theme.textTheme.bodySmall?.copyWith(
+                                    ),
+                                  ],
+                                  if (doctor.phone.isNotEmpty) ...[
+                                    const SizedBox(height: 2),
+                                    Row(
+                                      children: [
+                                        Icon(
+                                          Icons.phone_outlined,
+                                          size: 14,
                                           color: theme
                                               .colorScheme.onSurfaceVariant,
                                         ),
-                                      ),
-                                    ],
-                                  ),
+                                        const SizedBox(width: 4),
+                                        Text(
+                                          doctor.phone,
+                                          style: theme.textTheme.bodySmall
+                                              ?.copyWith(
+                                            color: theme
+                                                .colorScheme.onSurfaceVariant,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
                                 ],
                               ),
                             ),
@@ -672,6 +1000,8 @@ class _ChemistSelectionTab extends StatelessWidget {
   final AsyncValue<List<Chemist>> chemistsAsync;
   final Chemist? selectedChemist;
   final ValueChanged<Chemist> onChemistSelected;
+  final VoidCallback onCustomChemistPressed;
+  final VoidCallback onClearChemistPressed;
 
   const _ChemistSelectionTab({
     required this.searchController,
@@ -679,6 +1009,8 @@ class _ChemistSelectionTab extends StatelessWidget {
     required this.chemistsAsync,
     required this.selectedChemist,
     required this.onChemistSelected,
+    required this.onCustomChemistPressed,
+    required this.onClearChemistPressed,
   });
 
   @override
@@ -687,9 +1019,97 @@ class _ChemistSelectionTab extends StatelessWidget {
 
     return Column(
       children: [
+        // Custom Chemist Option at the top
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16.0, 12.0, 16.0, 4.0),
+          child: SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: onCustomChemistPressed,
+              icon: const Icon(Icons.add_business_outlined, size: 18),
+              label: const Text(
+                'Chemist not in list? Enter Custom Chemist',
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+              ),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: const Color(0xFF0284C7),
+                side: const BorderSide(color: Color(0xFF0284C7)),
+                padding:
+                    const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+            ),
+          ),
+        ),
+
+        // Selected Chemist Banner (if selected)
+        if (selectedChemist != null)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16.0, 6.0, 16.0, 4.0),
+            child: Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
+              decoration: BoxDecoration(
+                color: const Color(0xFF0284C7).withAlpha(20),
+                borderRadius: BorderRadius.circular(10),
+                border:
+                    Border.all(color: const Color(0xFF0284C7).withAlpha(120)),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    selectedChemist!.id.startsWith('custom')
+                        ? Icons.storefront_outlined
+                        : Icons.check_circle,
+                    color: const Color(0xFF0284C7),
+                    size: 18,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          selectedChemist!.id.startsWith('custom')
+                              ? 'Custom Chemist Selected'
+                              : 'Chemist Selected',
+                          style: const TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF0369A1),
+                          ),
+                        ),
+                        Text(
+                          selectedChemist!.name,
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF0369A1),
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: onClearChemistPressed,
+                    style: TextButton.styleFrom(
+                      visualDensity: VisualDensity.compact,
+                      foregroundColor: Colors.redAccent,
+                    ),
+                    child: const Text('Change', style: TextStyle(fontSize: 12)),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
         // Chemist Search Box
         Padding(
-          padding: const EdgeInsets.fromLTRB(16.0, 16.0, 16.0, 8.0),
+          padding: const EdgeInsets.fromLTRB(16.0, 8.0, 16.0, 8.0),
           child: TextField(
             controller: searchController,
             decoration: InputDecoration(
@@ -702,7 +1122,8 @@ class _ChemistSelectionTab extends StatelessWidget {
                     )
                   : null,
               filled: true,
-              fillColor: theme.colorScheme.surfaceContainerHighest.withAlpha(60),
+              fillColor:
+                  theme.colorScheme.surfaceContainerHighest.withAlpha(60),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
                 borderSide: BorderSide(
@@ -736,21 +1157,22 @@ class _ChemistSelectionTab extends StatelessWidget {
 
               if (activeChemists.isEmpty) {
                 return Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(24.0),
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.all(16.0),
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
+                      mainAxisSize: MainAxisSize.min,
                       children: [
                         Icon(
                           Icons.store_mall_directory_outlined,
-                          size: 48,
+                          size: 40,
                           color: theme.colorScheme.outline,
                         ),
-                        const SizedBox(height: 12),
+                        const SizedBox(height: 8),
                         const Text(
                           'No active chemists available.',
                           style: TextStyle(
-                            fontSize: 16,
+                            fontSize: 15,
                             fontWeight: FontWeight.w600,
                           ),
                         ),
@@ -770,21 +1192,22 @@ class _ChemistSelectionTab extends StatelessWidget {
 
               if (filteredChemists.isEmpty) {
                 return Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(24.0),
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.all(16.0),
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
+                      mainAxisSize: MainAxisSize.min,
                       children: [
                         Icon(
                           Icons.search_off_rounded,
-                          size: 48,
+                          size: 40,
                           color: theme.colorScheme.outline,
                         ),
-                        const SizedBox(height: 12),
+                        const SizedBox(height: 8),
                         const Text(
                           'No chemists found.',
                           style: TextStyle(
-                            fontSize: 16,
+                            fontSize: 15,
                             fontWeight: FontWeight.w600,
                           ),
                         ),
@@ -855,50 +1278,41 @@ class _ChemistSelectionTab extends StatelessWidget {
                                           : theme.colorScheme.onSurface,
                                     ),
                                   ),
-                                  const SizedBox(height: 4),
-                                  Row(
-                                    children: [
-                                      Icon(
-                                        Icons.phone_outlined,
-                                        size: 14,
+                                  if (chemist.address.isNotEmpty) ...[
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      chemist.address,
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                      style:
+                                          theme.textTheme.bodyMedium?.copyWith(
                                         color:
                                             theme.colorScheme.onSurfaceVariant,
                                       ),
-                                      const SizedBox(width: 4),
-                                      Text(
-                                        chemist.phone,
-                                        style:
-                                            theme.textTheme.bodySmall?.copyWith(
+                                    ),
+                                  ],
+                                  if (chemist.phone.isNotEmpty) ...[
+                                    const SizedBox(height: 2),
+                                    Row(
+                                      children: [
+                                        Icon(
+                                          Icons.phone_outlined,
+                                          size: 14,
                                           color: theme
                                               .colorScheme.onSurfaceVariant,
                                         ),
-                                      ),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 2),
-                                  Row(
-                                    children: [
-                                      Icon(
-                                        Icons.location_on_outlined,
-                                        size: 14,
-                                        color:
-                                            theme.colorScheme.onSurfaceVariant,
-                                      ),
-                                      const SizedBox(width: 4),
-                                      Expanded(
-                                        child: Text(
-                                          chemist.address,
-                                          maxLines: 2,
-                                          overflow: TextOverflow.ellipsis,
+                                        const SizedBox(width: 4),
+                                        Text(
+                                          chemist.phone,
                                           style: theme.textTheme.bodySmall
                                               ?.copyWith(
                                             color: theme
                                                 .colorScheme.onSurfaceVariant,
                                           ),
                                         ),
-                                      ),
-                                    ],
-                                  ),
+                                      ],
+                                    ),
+                                  ],
                                 ],
                               ),
                             ),

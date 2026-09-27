@@ -1,0 +1,78 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function isActive() {
+      return isAuthenticated() && getUserData().active == true;
+    }
+
+    function isAdmin() {
+      return isActive() && getUserData().role == 'admin';
+    }
+
+    function isMedicalRep() {
+      return isActive() && getUserData().role == 'medical_rep';
+    }
+
+    // Users collection
+    match /users/{userId} {
+      allow read: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
+      allow write: if isAdmin();
+    }
+
+    // Medicines and Variants
+    match /medicines/{medicineId} {
+      allow read: if isActive();
+      allow write: if isAdmin();
+    }
+
+    match /medicineVariants/{variantId} {
+      allow read: if isActive();
+      allow write: if isAdmin();
+    }
+
+    // Doctors
+    match /doctors/{doctorId} {
+      allow read: if isActive();
+      allow write: if isAdmin();
+    }
+
+    // Chemists
+    match /chemists/{chemistId} {
+      allow read: if isActive();
+      allow write: if isAdmin();
+    }
+
+    // Order number counter
+    match /counters/{counterId} {
+      allow read, write: if isAuthenticated() && isActive();
+    }
+
+    // Orders
+    match /orders/{orderId} {
+      allow create: if isMedicalRep()
+                    && request.resource.data.representative.id == request.auth.uid
+                    && request.resource.data.status == 'pending';
+
+      allow read: if isAdmin()
+                  || (
+                    isMedicalRep()
+                    && resource.data.representative.id == request.auth.uid
+                  );
+
+      allow update: if isAdmin()
+                    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt'])
+                    && request.resource.data.status in ['pending', 'confirmed', 'processing', 'delivered', 'cancelled'];
+
+      allow delete: if false;
+    }
+  }
+}

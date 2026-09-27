@@ -170,22 +170,16 @@ class _AddDoctorScreenState extends ConsumerState<AddDoctorScreen> {
                 ),
                 const SizedBox(height: 16),
 
-                // Specialization field
+                // Specialization field (optional)
                 TextFormField(
                   controller: _specializationController,
                   textInputAction: TextInputAction.next,
                   decoration: const InputDecoration(
-                    labelText: 'Specialization *',
+                    labelText: 'Specialization (Optional)',
                     hintText: 'e.g. Cardiologist, General Physician',
                     prefixIcon: Icon(Icons.medical_information_outlined),
                     border: OutlineInputBorder(),
                   ),
-                  validator: (value) {
-                    if (value == null || value.trim().isEmpty) {
-                      return 'Please enter doctor specialization';
-                    }
-                    return null;
-                  },
                 ),
                 const SizedBox(height: 8),
 

@@ -1,40 +1,47 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/app_user.dart';
+import '../../models/order_statistics.dart';
+import '../../providers/order_provider.dart';
 import '../../widgets/admin/dashboard_card.dart';
+import '../../widgets/orders/order_overview_section.dart';
 import 'chemist/chemists_screen.dart';
 import 'doctor/doctors_screen.dart';
 import 'medical_rep/medical_reps_screen.dart';
 import 'medicine/medicines_screen.dart';
-import 'placeholder_screen.dart';
+import 'orders/admin_orders_screen.dart';
+import 'reports/admin_reports_screen.dart';
 
-class AdminHomeScreen extends StatelessWidget {
+class AdminHomeScreen extends ConsumerWidget {
   final AppUser user;
+  final void Function(String? statusFilter)? onNavigateToOrders;
 
   const AdminHomeScreen({
     super.key,
     required this.user,
+    this.onNavigateToOrders,
   });
 
-  void _navigateToPlaceholder(
-    BuildContext context, {
-    required String sectionName,
-    required IconData icon,
-    required String description,
-  }) {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => PlaceholderScreen(
-          sectionName: sectionName,
-          icon: icon,
-          description: description,
+  void _navigateToOrders(
+    BuildContext context,
+    WidgetRef ref, [
+    String status = 'all',
+  ]) {
+    ref.read(adminOrderStatusFilterProvider.notifier).setFilter(status);
+    if (onNavigateToOrders != null) {
+      onNavigateToOrders!(status);
+    } else {
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => AdminOrdersScreen(initialFilter: status),
         ),
-      ),
-    );
+      );
+    }
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final displayName = user.name.trim().isNotEmpty ? user.name.trim() : 'Admin';
 
@@ -200,30 +207,35 @@ class AdminHomeScreen extends StatelessWidget {
                         subtitle: 'View and manage orders',
                         icon: Icons.receipt_long_outlined,
                         iconColor: const Color(0xFFD97706),
-                        onTap: () => _navigateToPlaceholder(
-                          context,
-                          sectionName: 'Orders',
-                          icon: Icons.receipt_long_outlined,
-                          description:
-                              'Review submitted orders from representatives, update status, and generate PDFs.',
-                        ),
+                        onTap: () => _navigateToOrders(context, ref, 'all'),
                       ),
                       DashboardCard(
                         title: 'Reports',
                         subtitle: 'View business/order reports',
                         icon: Icons.analytics_outlined,
                         iconColor: const Color(0xFF059669),
-                        onTap: () => _navigateToPlaceholder(
-                          context,
-                          sectionName: 'Reports',
-                          icon: Icons.analytics_outlined,
-                          description:
-                              'View sales analytics, doctor ordering trends, and representative performance.',
-                        ),
+                        onTap: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => const AdminReportsScreen(),
+                            ),
+                          );
+                        },
                       ),
                     ],
                   );
                 },
+              ),
+              const SizedBox(height: 24),
+
+              // Order Overview Section
+              OrderOverviewSection(
+                title: 'Order Overview',
+                valueLabel: 'Total Value',
+                statistics: ref.watch(adminOrderStatisticsProvider).value ??
+                    OrderStatistics.empty,
+                onStatusTap: (status) =>
+                    _navigateToOrders(context, ref, status),
               ),
               const SizedBox(height: 16),
             ],

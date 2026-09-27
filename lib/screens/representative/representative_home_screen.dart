@@ -1,16 +1,22 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/app_user.dart';
+import '../../models/order_statistics.dart';
+import '../../providers/order_provider.dart';
+import '../../widgets/orders/order_overview_section.dart';
 import 'order/create_order_screen.dart';
 
-class RepresentativeHomeScreen extends StatelessWidget {
+class RepresentativeHomeScreen extends ConsumerWidget {
   final AppUser user;
   final VoidCallback? onNavigateToOrders;
+  final void Function(String? statusFilter)? onNavigateToOrdersWithFilter;
 
   const RepresentativeHomeScreen({
     super.key,
     required this.user,
     this.onNavigateToOrders,
+    this.onNavigateToOrdersWithFilter,
   });
 
   void _navigateToCreateOrder(BuildContext context) {
@@ -21,8 +27,23 @@ class RepresentativeHomeScreen extends StatelessWidget {
     );
   }
 
+  void _navigateToOrders(
+    BuildContext context,
+    WidgetRef ref, [
+    String status = 'all',
+  ]) {
+    ref
+        .read(representativeOrderStatusFilterProvider.notifier)
+        .setFilter(status);
+    if (onNavigateToOrdersWithFilter != null) {
+      onNavigateToOrdersWithFilter!(status);
+    } else if (onNavigateToOrders != null) {
+      onNavigateToOrders!();
+    }
+  }
+
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final displayName =
         user.name.trim().isNotEmpty ? user.name.trim() : 'Representative';
@@ -220,7 +241,16 @@ class RepresentativeHomeScreen extends StatelessWidget {
               color: theme.colorScheme.surface,
               child: InkWell(
                 borderRadius: BorderRadius.circular(14),
-                onTap: onNavigateToOrders,
+                onTap: () {
+                  ref
+                      .read(representativeOrderStatusFilterProvider.notifier)
+                      .reset();
+                  if (onNavigateToOrdersWithFilter != null) {
+                    onNavigateToOrdersWithFilter!('all');
+                  } else if (onNavigateToOrders != null) {
+                    onNavigateToOrders!();
+                  }
+                },
                 child: Padding(
                   padding: const EdgeInsets.all(16.0),
                   child: Row(
@@ -266,6 +296,18 @@ class RepresentativeHomeScreen extends StatelessWidget {
                   ),
                 ),
               ),
+            ),
+            const SizedBox(height: 24),
+
+            // My Order Overview Section
+            OrderOverviewSection(
+              title: 'My Order Overview',
+              valueLabel: 'My Order Value',
+              statistics:
+                  ref.watch(representativeOrderStatisticsProvider).value ??
+                      OrderStatistics.empty,
+              onStatusTap: (status) =>
+                  _navigateToOrders(context, ref, status),
             ),
             const SizedBox(height: 24),
 

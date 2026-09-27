@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -8,16 +9,21 @@ import 'package:medical_order_management/models/doctor.dart';
 import 'package:medical_order_management/models/medical_rep.dart';
 import 'package:medical_order_management/models/medicine.dart';
 import 'package:medical_order_management/models/medicine_variant.dart';
+import 'package:medical_order_management/models/order.dart';
 import 'package:medical_order_management/models/order_draft.dart';
 import 'package:medical_order_management/models/order_draft_item.dart';
+import 'package:medical_order_management/models/order_item.dart';
+import 'package:medical_order_management/models/order_statistics.dart';
 import 'package:medical_order_management/providers/auth_provider.dart';
 import 'package:medical_order_management/providers/chemist_provider.dart';
 import 'package:medical_order_management/providers/doctor_provider.dart';
 import 'package:medical_order_management/providers/medical_rep_provider.dart';
 import 'package:medical_order_management/providers/medicine_provider.dart';
+import 'package:medical_order_management/providers/order_provider.dart';
 import 'package:medical_order_management/screens/admin/admin_dashboard_screen.dart';
 import 'package:medical_order_management/screens/admin/admin_management_screen.dart';
 import 'package:medical_order_management/screens/admin/admin_orders_screen.dart';
+import 'package:medical_order_management/screens/admin/orders/admin_order_details_screen.dart';
 import 'package:medical_order_management/screens/admin/admin_profile_screen.dart';
 import 'package:medical_order_management/screens/admin/chemist/add_chemist_screen.dart';
 import 'package:medical_order_management/screens/admin/chemist/chemist_details_screen.dart';
@@ -32,13 +38,23 @@ import 'package:medical_order_management/screens/admin/medicine/add_medicine_scr
 import 'package:medical_order_management/screens/admin/medicine/add_variant_dialog.dart';
 import 'package:medical_order_management/screens/admin/medicine/medicine_details_screen.dart';
 import 'package:medical_order_management/screens/admin/medicine/medicines_screen.dart';
-import 'package:medical_order_management/screens/admin/placeholder_screen.dart';
 import 'package:medical_order_management/screens/auth/auth_wrapper.dart';
 import 'package:medical_order_management/screens/auth/login_screen.dart';
 import 'package:medical_order_management/screens/representative/order/add_medicines_screen.dart';
 import 'package:medical_order_management/screens/representative/order/create_order_screen.dart';
+import 'package:medical_order_management/screens/representative/order/order_success_screen.dart';
+import 'package:medical_order_management/screens/representative/order/representative_order_details_screen.dart';
 import 'package:medical_order_management/screens/representative/order/review_order_screen.dart';
 import 'package:medical_order_management/screens/representative/representative_dashboard_screen.dart';
+import 'package:medical_order_management/screens/representative/representative_orders_screen.dart';
+import 'package:medical_order_management/services/order_service.dart';
+import 'package:medical_order_management/services/order_pdf_service.dart';
+import 'package:medical_order_management/config/company_config.dart';
+import 'package:medical_order_management/utils/currency_formatter.dart';
+import 'package:medical_order_management/models/order_report.dart';
+import 'package:medical_order_management/services/order_report_service.dart';
+import 'package:medical_order_management/screens/admin/reports/admin_reports_screen.dart';
+import 'package:medical_order_management/widgets/orders/order_overview_section.dart';
 
 void main() {
   group('Doctor Model Tests', () {
@@ -370,11 +386,16 @@ void main() {
       expect(find.text('Add Representative'), findsNWidgets(2)); // FAB and empty state button
     });
 
-    testWidgets('tapping Reports card opens PlaceholderScreen with Coming Soon',
+    testWidgets('tapping Reports card navigates to real AdminReportsScreen',
         (WidgetTester tester) async {
+      final fakeOrderService = _FakeOrderService();
       await tester.pumpWidget(
-        const ProviderScope(
-          child: MaterialApp(
+        ProviderScope(
+          overrides: [
+            orderServiceProvider.overrideWithValue(fakeOrderService),
+            userProfileProvider.overrideWith((ref) => Stream.value(adminUser)),
+          ],
+          child: const MaterialApp(
             home: AdminDashboardScreen(user: adminUser),
           ),
         ),
@@ -384,9 +405,8 @@ void main() {
       await tester.tap(find.text('Reports'));
       await tester.pumpAndSettle();
 
-      expect(find.byType(PlaceholderScreen), findsOneWidget);
-      expect(find.text('Coming Soon'), findsOneWidget);
-      expect(find.text('Reports'), findsNWidgets(2)); // AppBar & body title
+      expect(find.byType(AdminReportsScreen), findsOneWidget);
+      expect(find.text('Reports & Analytics'), findsOneWidget);
     });
 
     testWidgets('bottom navigation switches between tabs',
@@ -409,7 +429,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byType(AdminOrdersScreen), findsOneWidget);
       expect(find.text('Orders Management'), findsOneWidget);
-      expect(find.text('Coming Soon'), findsOneWidget);
+      expect(find.byType(TextField), findsOneWidget);
 
       // Switch to Management tab via navigation bar
       await tester.tap(
@@ -472,7 +492,7 @@ void main() {
       expect(find.text('ACTIVE'), findsOneWidget);
     });
 
-    testWidgets('AddMedicineScreen validates required form fields',
+    testWidgets('AddMedicineScreen validates only medicine name as required parent field',
         (WidgetTester tester) async {
       await tester.pumpWidget(
         const ProviderScope(
@@ -482,13 +502,19 @@ void main() {
         ),
       );
 
-      await tester.tap(find.text('Create & Add Variants'));
+      // Switch off initial variant to test parent medicine required fields
+      await tester.tap(find.byType(Switch));
+      await tester.pumpAndSettle();
+
+      final buttonFinder = find.widgetWithText(ElevatedButton, 'Create Medicine');
+      await tester.ensureVisible(buttonFinder);
+      await tester.tap(buttonFinder);
       await tester.pumpAndSettle();
 
       expect(find.text('Please enter medicine name'), findsOneWidget);
-      expect(find.text('Please enter brand/manufacturer name'), findsOneWidget);
-      expect(find.text('Please enter active composition'), findsOneWidget);
-      expect(find.text('Please enter therapeutic category'), findsOneWidget);
+      expect(find.text('Please enter brand/manufacturer name'), findsNothing);
+      expect(find.text('Please enter active composition'), findsNothing);
+      expect(find.text('Please enter therapeutic category'), findsNothing);
     });
 
     testWidgets('MedicineDetailsScreen displays medicine info and variants list',
@@ -613,7 +639,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Please enter doctor name'), findsOneWidget);
-      expect(find.text('Please enter doctor specialization'), findsOneWidget);
+      expect(find.text('Please enter doctor specialization'), findsNothing);
 
       // Enter invalid phone number
       await tester.enterText(
@@ -621,7 +647,7 @@ void main() {
         'Dr. Test',
       );
       await tester.enterText(
-        find.widgetWithText(TextFormField, 'Specialization *'),
+        find.widgetWithText(TextFormField, 'Specialization (Optional)'),
         'Dentist',
       );
       await tester.enterText(
@@ -736,8 +762,8 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Please enter chemist/shop name'), findsOneWidget);
-      expect(find.text('Please enter phone number'), findsOneWidget);
-      expect(find.text('Please enter address'), findsOneWidget);
+      expect(find.text('Please enter phone number'), findsNothing);
+      expect(find.text('Please enter address'), findsNothing);
 
       // Enter invalid phone number
       await tester.enterText(
@@ -745,11 +771,11 @@ void main() {
         'Apollo Pharmacy',
       );
       await tester.enterText(
-        find.widgetWithText(TextFormField, 'Address *'),
+        find.widgetWithText(TextFormField, 'Address (Optional)'),
         '123 MG Road',
       );
       await tester.enterText(
-        find.widgetWithText(TextFormField, 'Phone Number *'),
+        find.widgetWithText(TextFormField, 'Phone Number (Optional)'),
         '12345',
       );
 
@@ -769,7 +795,7 @@ void main() {
 
       // Enter valid 10-digit phone number
       await tester.enterText(
-        find.widgetWithText(TextFormField, 'Phone Number *'),
+        find.widgetWithText(TextFormField, 'Phone Number (Optional)'),
         '9876543210',
       );
 
@@ -1506,14 +1532,18 @@ void main() {
       await tester.pumpAndSettle();
 
       // Initially neither doctor nor chemist is selected
-      expect(find.text('Doctor required'), findsOneWidget);
-      expect(find.text('Chemist required'), findsOneWidget);
+      expect(find.text('Doctor (Optional)'), findsOneWidget);
+      expect(find.text('Chemist required *'), findsOneWidget);
 
-      // Tap Continue before selecting both -> triggers SnackBar indicating doctor is missing
+      // Tap Continue before selecting chemist -> triggers SnackBar indicating chemist is missing
       await tester.tap(find.text('Continue'));
       await tester.pumpAndSettle();
-      expect(find.text('Please select a doctor to continue.'), findsOneWidget);
+      expect(find.text('Please select or enter a chemist to continue.'), findsOneWidget);
       await tester.pump(const Duration(seconds: 4));
+      await tester.pumpAndSettle();
+
+      // Switch to Doctor tab to select doctor
+      await tester.tap(find.text('Select Doctor'));
       await tester.pumpAndSettle();
 
       // Select Doctor 1
@@ -1526,7 +1556,7 @@ void main() {
       // Tap Continue before selecting chemist -> triggers SnackBar indicating chemist is missing
       await tester.tap(find.text('Continue'));
       await tester.pumpAndSettle();
-      expect(find.text('Please select a chemist to continue.'), findsOneWidget);
+      expect(find.text('Please select or enter a chemist to continue.'), findsOneWidget);
       await tester.pump(const Duration(seconds: 4));
       await tester.pumpAndSettle();
 
@@ -2069,19 +2099,2078 @@ void main() {
       expect(find.text('₹450.00'), findsOneWidget);
       expect(find.text('₹1050.00'), findsOneWidget);
 
-      // Tapping Submit Order shows placeholder dialog (no Firestore writes)
+      // Tapping Submit Order shows confirmation dialog
       await tester.ensureVisible(find.text('Submit Order'));
       await tester.tap(find.text('Submit Order'));
       await tester.pumpAndSettle();
 
-      expect(
-        find.text('Order submission will be implemented in the next stage.'),
-        findsOneWidget,
-      );
-      await tester.tap(find.text('OK'));
+      expect(find.text('Submit this order?'), findsOneWidget);
+      expect(find.text('Doctor: Dr. Rajesh Kumar'), findsWidgets);
+      expect(find.text('Chemist: Apollo Pharmacy'), findsWidgets);
+      expect(find.text('Total items: 2'), findsOneWidget);
+      expect(find.text('Total quantity: 15 units'), findsOneWidget);
+      expect(find.text('Total amount: ₹1050.00'), findsOneWidget);
+      await tester.tap(find.text('Cancel'));
       await tester.pumpAndSettle();
+      expect(find.text('Submit this order?'), findsNothing);
     });
   });
+
+  group('Order & Submission Management Tests', () {
+    test('1. Order model serialization and deserialization', () {
+      final now = DateTime(2026, 9, 26, 12, 0);
+      const item = OrderItem(
+        medicineId: 'm1',
+        medicineName: 'Azithromycin',
+        brand: 'Test Pharma',
+        composition: 'Azithromycin',
+        variantId: 'v1',
+        form: 'Tablet',
+        strength: '250 mg',
+        packSize: '10 tablets',
+        mrp: 80,
+        supplierPrice: 60,
+        quantity: 10,
+        itemTotal: 600,
+      );
+
+      final order = OrderModel(
+        id: 'ord_1',
+        orderNumber: 'ORD-20260926-0001',
+        representative: {
+          'id': 'rep_1',
+          'name': 'Rahul Sharma',
+          'email': 'rahul@example.com',
+        },
+        doctor: {
+          'id': 'doc_1',
+          'name': 'Dr. John Smith',
+          'specialization': 'Cardiologist',
+          'phone': '9876543210',
+        },
+        chemist: {
+          'id': 'chm_1',
+          'name': 'Apollo Pharmacy',
+          'phone': '9876543210',
+          'address': 'MG Road, Bangalore',
+        },
+        items: const [item],
+        totalItems: 1,
+        totalQuantity: 10,
+        totalAmount: 600.0,
+        status: 'pending',
+        createdAt: now,
+        updatedAt: now,
+      );
+
+      final map = order.toMap();
+      expect(map['orderNumber'], 'ORD-20260926-0001');
+      expect(map['status'], 'pending');
+      expect(map['totalItems'], 1);
+      expect(map['totalQuantity'], 10);
+      expect(map['totalAmount'], 600.0);
+
+      final reconstructed = OrderModel.fromFirestore(map, 'ord_1');
+      expect(reconstructed.id, 'ord_1');
+      expect(reconstructed.orderNumber, 'ORD-20260926-0001');
+      expect(reconstructed.representativeId, 'rep_1');
+      expect(reconstructed.representativeName, 'Rahul Sharma');
+      expect(reconstructed.representativeEmail, 'rahul@example.com');
+      expect(reconstructed.doctorId, 'doc_1');
+      expect(reconstructed.doctorName, 'Dr. John Smith');
+      expect(reconstructed.doctorSpecialization, 'Cardiologist');
+      expect(reconstructed.doctorPhone, '9876543210');
+      expect(reconstructed.chemistId, 'chm_1');
+      expect(reconstructed.chemistName, 'Apollo Pharmacy');
+      expect(reconstructed.chemistPhone, '9876543210');
+      expect(reconstructed.chemistAddress, 'MG Road, Bangalore');
+      expect(reconstructed.items.length, 1);
+      expect(reconstructed.items.first.medicineName, 'Azithromycin');
+    });
+
+    test('2. Order item serialization and deserialization', () {
+      const draftItem = OrderDraftItem(
+        medicineId: 'med_1',
+        medicineName: 'Amoxicillin',
+        brand: 'HealthCorp',
+        composition: 'Amoxicillin 500mg',
+        variantId: 'var_1',
+        form: 'Capsule',
+        strength: '500 mg',
+        packSize: '15 capsules',
+        mrp: 150.0,
+        supplierPrice: 110.0,
+        quantity: 4,
+      );
+
+      final orderItem = OrderItem.fromDraftItem(draftItem);
+      expect(orderItem.itemTotal, 440.0);
+
+      final map = orderItem.toMap();
+      expect(map['medicineId'], 'med_1');
+      expect(map['medicineName'], 'Amoxicillin');
+      expect(map['form'], 'Capsule');
+      expect(map['supplierPrice'], 110.0);
+      expect(map['quantity'], 4);
+      expect(map['itemTotal'], 440.0);
+
+      final fromMapItem = OrderItem.fromMap(map);
+      expect(fromMapItem.medicineId, 'med_1');
+      expect(fromMapItem.packSize, '15 capsules');
+      expect(fromMapItem.supplierPrice, 110.0);
+      expect(fromMapItem.itemTotal, 440.0);
+    });
+
+    test('3. Order total calculation across draft items', () {
+      const item1 = OrderDraftItem(
+        medicineId: 'm1',
+        medicineName: 'Med 1',
+        brand: 'B1',
+        composition: 'C1',
+        variantId: 'v1',
+        form: 'Tab',
+        strength: '10mg',
+        packSize: '10',
+        mrp: 50.0,
+        supplierPrice: 40.0,
+        quantity: 5,
+      );
+      const item2 = OrderDraftItem(
+        medicineId: 'm2',
+        medicineName: 'Med 2',
+        brand: 'B2',
+        composition: 'C2',
+        variantId: 'v2',
+        form: 'Cap',
+        strength: '20mg',
+        packSize: '20',
+        mrp: 100.0,
+        supplierPrice: 80.0,
+        quantity: 2,
+      );
+
+      final draft = OrderDraft(
+        doctor: const Doctor(
+          id: 'd1',
+          name: 'Doc',
+          specialization: 'Spec',
+          phone: '1234567890',
+          active: true,
+        ),
+        chemist: const Chemist(
+          id: 'c1',
+          name: 'Chem',
+          phone: '1234567890',
+          address: 'Addr',
+          active: true,
+        ),
+        items: const [item1, item2],
+      );
+
+      expect(draft.totalItems, 2);
+      expect(draft.totalQuantity, 7);
+      expect(draft.totalAmount, (40.0 * 5) + (80.0 * 2));
+    });
+
+    test('4. Order number format follows ORD-YYYYMMDD-XXXX', () {
+      const orderNumber = 'ORD-20260926-0001';
+      final orderRegex = RegExp(r'^ORD-\d{8}-\d{4}$');
+      expect(orderRegex.hasMatch(orderNumber), isTrue);
+      expect(orderNumber.startsWith('ORD-20260926-'), isTrue);
+    });
+
+    testWidgets('5. Submit confirmation dialog and cancel handling',
+        (tester) async {
+      final fakeOrderService = _FakeOrderService();
+      final draft = _createSampleDraft();
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            orderServiceProvider.overrideWithValue(fakeOrderService),
+          ],
+          child: MaterialApp(
+            home: ReviewOrderScreen(orderDraft: draft),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      await tester.ensureVisible(find.text('Submit Order'));
+      await tester.tap(find.text('Submit Order'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Submit this order?'), findsOneWidget);
+      expect(find.text('Doctor: Dr. Test'), findsWidgets);
+      expect(find.text('Chemist: Test Pharmacy'), findsWidgets);
+      expect(find.text('Total items: 1'), findsOneWidget);
+      expect(find.text('Total quantity: 5 units'), findsOneWidget);
+      expect(find.text('Total amount: ₹250.00'), findsOneWidget);
+
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+      expect(find.text('Submit this order?'), findsNothing);
+      expect(fakeOrderService.submissionAttempts, 0);
+    });
+
+    testWidgets('6. Submit loading state and duplicate submission prevention',
+        (tester) async {
+      final fakeOrderService = _FakeOrderService();
+      final completer = Completer<OrderModel>();
+      fakeOrderService.submitCompleter = completer;
+      final draft = _createSampleDraft();
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            orderServiceProvider.overrideWithValue(fakeOrderService),
+          ],
+          child: MaterialApp(
+            home: ReviewOrderScreen(orderDraft: draft),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      await tester.ensureVisible(find.text('Submit Order'));
+      await tester.tap(find.text('Submit Order'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Submit'));
+      await tester.pump();
+
+      expect(find.text('Submitting Order...'), findsOneWidget);
+      expect(find.byType(CircularProgressIndicator), findsOneWidget);
+
+      await tester.tap(find.text('Submitting Order...'), warnIfMissed: false);
+      await tester.pump();
+      expect(fakeOrderService.submissionAttempts, 1);
+
+      completer.complete(_createSampleOrder());
+      await tester.pumpAndSettle();
+
+      expect(find.text('Order Submitted'), findsOneWidget);
+    });
+
+    testWidgets('7. Successful submission navigates to OrderSuccessScreen',
+        (tester) async {
+      final fakeOrderService = _FakeOrderService();
+      final draft = _createSampleDraft();
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            orderServiceProvider.overrideWithValue(fakeOrderService),
+          ],
+          child: MaterialApp(
+            home: ReviewOrderScreen(orderDraft: draft),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      await tester.ensureVisible(find.text('Submit Order'));
+      await tester.tap(find.text('Submit Order'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Submit'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Order Submitted'), findsOneWidget);
+      expect(find.text('ORD-20260926-0001'), findsOneWidget);
+      expect(find.text('View My Orders'), findsOneWidget);
+      expect(find.text('Back to Home'), findsOneWidget);
+    });
+
+    testWidgets('8. Failed submission keeps draft intact and displays SnackBar',
+        (tester) async {
+      final fakeOrderService = _FakeOrderService()..shouldFail = true;
+      final draft = _createSampleDraft();
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            orderServiceProvider.overrideWithValue(fakeOrderService),
+          ],
+          child: MaterialApp(
+            home: ReviewOrderScreen(orderDraft: draft),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      await tester.ensureVisible(find.text('Submit Order'));
+      await tester.tap(find.text('Submit Order'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Submit'));
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('Failed to submit order'), findsOneWidget);
+      expect(find.text('Review Order'), findsOneWidget);
+      expect(find.text('Doctor: Dr. Test'), findsOneWidget);
+      expect(find.text('Submit Order'), findsOneWidget);
+    });
+
+    testWidgets('9. Success screen displays complete order details and buttons',
+        (tester) async {
+      final order = _createSampleOrder();
+
+      await tester.pumpWidget(
+        ProviderScope(
+          child: MaterialApp(
+            home: OrderSuccessScreen(order: order),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      expect(find.text('Order Submitted'), findsOneWidget);
+      expect(find.text('ORD-20260926-0001'), findsOneWidget);
+      expect(find.text('Dr. Test'), findsOneWidget);
+      expect(find.text('Test Pharmacy'), findsOneWidget);
+      expect(find.text('₹250.00'), findsOneWidget);
+      expect(find.text('View My Orders'), findsOneWidget);
+      expect(find.text('Back to Home'), findsOneWidget);
+    });
+
+    testWidgets('10. My Orders displays only representative\'s orders',
+        (tester) async {
+      final repOrder = _createSampleOrder(id: 'ord_mine', repId: 'rep_current');
+      final fakeOrderService = _FakeOrderService()..orders.add(repOrder);
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            orderServiceProvider.overrideWithValue(fakeOrderService),
+            authStateProvider.overrideWith(
+              (ref) => Stream.value(_MockUserWithUid('rep_current')),
+            ),
+          ],
+          child: const MaterialApp(
+            home: RepresentativeOrdersScreen(),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      expect(find.text(repOrder.orderNumber), findsOneWidget);
+      expect(find.text('Dr. Test'), findsOneWidget);
+      expect(find.text('Test Pharmacy'), findsOneWidget);
+      expect(find.text('PENDING'), findsOneWidget);
+    });
+
+    testWidgets('11. Order details screen displays full snapshot',
+        (tester) async {
+      final order = _createSampleOrder();
+      final fakeOrderService = _FakeOrderService()..orders.add(order);
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            orderServiceProvider.overrideWithValue(fakeOrderService),
+          ],
+          child: MaterialApp(
+            home: RepresentativeOrderDetailsScreen(
+              orderId: order.id,
+              initialOrder: order,
+            ),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      expect(find.text(order.orderNumber), findsOneWidget);
+      expect(find.text('PENDING'), findsOneWidget);
+      expect(find.text('Dr. Test'), findsOneWidget);
+      expect(find.text('Test Pharmacy'), findsOneWidget);
+      expect(find.text('Paracetamol'), findsOneWidget);
+      expect(find.text('₹250.00'), findsWidgets);
+    });
+
+    testWidgets('12. Empty orders state displays "No orders yet."',
+        (tester) async {
+      final fakeOrderService = _FakeOrderService();
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            orderServiceProvider.overrideWithValue(fakeOrderService),
+            authStateProvider.overrideWith(
+              (ref) => Stream.value(_MockUserWithUid('rep_empty')),
+            ),
+          ],
+          child: const MaterialApp(
+            home: RepresentativeOrdersScreen(),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      expect(find.text('No orders yet.'), findsOneWidget);
+      expect(find.text('Create New Order'), findsWidgets);
+    });
+
+    testWidgets('13. Order status display formatting', (tester) async {
+      final orderApproved = _createSampleOrder(
+        id: 'ord_appr',
+        status: 'approved',
+      );
+      final fakeOrderService = _FakeOrderService()..orders.add(orderApproved);
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            orderServiceProvider.overrideWithValue(fakeOrderService),
+            authStateProvider.overrideWith(
+              (ref) => Stream.value(_MockUserWithUid('rep_current')),
+            ),
+          ],
+          child: const MaterialApp(
+            home: RepresentativeOrdersScreen(),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      expect(find.text('APPROVED'), findsOneWidget);
+    });
+  });
+
+  group('Admin Orders Management Tests', () {
+    testWidgets('1. Admin Orders screen renders list with order cards', (tester) async {
+      final fakeOrderService = _FakeOrderService();
+      final order1 = _createSampleOrder(
+        id: 'ord_1',
+        orderNumber: 'ORD-20260926-0001',
+        status: 'pending',
+      );
+      final order2 = _createSampleOrder(
+        id: 'ord_2',
+        orderNumber: 'ORD-20260926-0002',
+        status: 'confirmed',
+      );
+      fakeOrderService.orders.addAll([order1, order2]);
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            orderServiceProvider.overrideWithValue(fakeOrderService),
+          ],
+          child: const MaterialApp(
+            home: AdminOrdersScreen(),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      expect(find.text('Orders Management'), findsOneWidget);
+      expect(find.text('ORD-20260926-0001'), findsOneWidget);
+      expect(find.text('ORD-20260926-0002'), findsOneWidget);
+      expect(find.text('Rep: Rahul Sharma'), findsWidgets);
+      expect(find.text('Dr. Test'), findsWidgets);
+      expect(find.text('Test Pharmacy'), findsWidgets);
+      expect(find.text('PENDING'), findsOneWidget);
+      expect(find.text('CONFIRMED'), findsOneWidget);
+    });
+
+    testWidgets('2. Status filtering filters orders by status chip', (tester) async {
+      final fakeOrderService = _FakeOrderService();
+      final orderPending = _createSampleOrder(id: 'ord_pend', status: 'pending');
+      final orderDelivered = OrderModel(
+        id: 'ord_deliv',
+        orderNumber: 'ORD-20260926-0002',
+        representative: const {'id': 'r2', 'name': 'Priya Singh', 'email': 'priya@example.com'},
+        doctor: const {'id': 'd2', 'name': 'Dr. Sharma', 'specialization': 'ENT', 'phone': '9876543211'},
+        chemist: const {'id': 'c2', 'name': 'City Meds', 'phone': '9876543211', 'address': 'City Center'},
+        items: const [],
+        totalItems: 0,
+        totalQuantity: 0,
+        totalAmount: 0.0,
+        status: 'delivered',
+        createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
+      );
+      fakeOrderService.orders.addAll([orderPending, orderDelivered]);
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            orderServiceProvider.overrideWithValue(fakeOrderService),
+          ],
+          child: const MaterialApp(
+            home: AdminOrdersScreen(),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      // Initially 'All' is selected -> both orders visible
+      expect(find.text('ORD-20260926-0001'), findsOneWidget);
+      expect(find.text('ORD-20260926-0002'), findsOneWidget);
+
+      // Tap 'Delivered' chip
+      await tester.tap(find.widgetWithText(FilterChip, 'Delivered'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('ORD-20260926-0001'), findsNothing);
+      expect(find.text('ORD-20260926-0002'), findsOneWidget);
+      expect(find.text('DELIVERED'), findsOneWidget);
+
+      // Tap 'Pending' chip
+      await tester.tap(find.widgetWithText(FilterChip, 'Pending'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('ORD-20260926-0001'), findsOneWidget);
+      expect(find.text('ORD-20260926-0002'), findsNothing);
+      expect(find.text('PENDING'), findsOneWidget);
+    });
+
+    testWidgets('3. Search filtering matches order number, rep, doctor, chemist', (tester) async {
+      final fakeOrderService = _FakeOrderService();
+      final order1 = OrderModel(
+        id: 'o1',
+        orderNumber: 'ORD-20260926-0010',
+        representative: const {'id': 'r1', 'name': 'Rahul Sharma', 'email': 'rahul@med.com'},
+        doctor: const {'id': 'd1', 'name': 'Dr. Gupta', 'specialization': 'Pediatrician', 'phone': '1234567890'},
+        chemist: const {'id': 'c1', 'name': 'Apollo Bangalore', 'phone': '1234567890', 'address': 'MG Road'},
+        items: const [],
+        totalItems: 0,
+        totalQuantity: 0,
+        totalAmount: 100.0,
+        status: 'pending',
+      );
+      final order2 = OrderModel(
+        id: 'o2',
+        orderNumber: 'ORD-20260926-0020',
+        representative: const {'id': 'r2', 'name': 'Ankit Verma', 'email': 'ankit@med.com'},
+        doctor: const {'id': 'd2', 'name': 'Dr. Mehta', 'specialization': 'Surgeon', 'phone': '1234567891'},
+        chemist: const {'id': 'c2', 'name': 'Wellness Pharmacy', 'phone': '1234567891', 'address': 'Ring Road'},
+        items: const [],
+        totalItems: 0,
+        totalQuantity: 0,
+        totalAmount: 200.0,
+        status: 'confirmed',
+      );
+      fakeOrderService.orders.addAll([order1, order2]);
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            orderServiceProvider.overrideWithValue(fakeOrderService),
+          ],
+          child: const MaterialApp(
+            home: AdminOrdersScreen(),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      // Search by chemist name
+      await tester.enterText(find.byType(TextField), 'Wellness');
+      await tester.pumpAndSettle();
+      expect(find.text('ORD-20260926-0020'), findsOneWidget);
+      expect(find.text('ORD-20260926-0010'), findsNothing);
+
+      // Search by rep name
+      await tester.enterText(find.byType(TextField), 'Rahul');
+      await tester.pumpAndSettle();
+      expect(find.text('ORD-20260926-0010'), findsOneWidget);
+      expect(find.text('ORD-20260926-0020'), findsNothing);
+
+      // Search by doctor name
+      await tester.enterText(find.byType(TextField), 'Mehta');
+      await tester.pumpAndSettle();
+      expect(find.text('ORD-20260926-0020'), findsOneWidget);
+      expect(find.text('ORD-20260926-0010'), findsNothing);
+
+      // Search by order number
+      await tester.enterText(find.byType(TextField), '0010');
+      await tester.pumpAndSettle();
+      expect(find.text('ORD-20260926-0010'), findsOneWidget);
+      expect(find.text('ORD-20260926-0020'), findsNothing);
+
+      // Search with non-matching query shows no match view
+      await tester.enterText(find.byType(TextField), 'NonExistent');
+      await tester.pumpAndSettle();
+      expect(find.text('No matching orders'), findsOneWidget);
+      expect(find.text('Clear Filters'), findsOneWidget);
+
+      await tester.tap(find.text('Clear Filters'));
+      await tester.pumpAndSettle();
+      expect(find.text('ORD-20260926-0010'), findsOneWidget);
+      expect(find.text('ORD-20260926-0020'), findsOneWidget);
+    });
+
+    testWidgets('4. Admin order details screen displays all sections', (tester) async {
+      final order = _createSampleOrder();
+      final fakeOrderService = _FakeOrderService()..orders.add(order);
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            orderServiceProvider.overrideWithValue(fakeOrderService),
+          ],
+          child: MaterialApp(
+            home: AdminOrderDetailsScreen(
+              orderId: order.id,
+              initialOrder: order,
+            ),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      expect(find.text('Admin Order Details'), findsOneWidget);
+      expect(find.text(order.orderNumber), findsOneWidget);
+      expect(find.text('PENDING'), findsOneWidget);
+      expect(find.text('REPRESENTATIVE'), findsOneWidget);
+      expect(find.text('Rahul Sharma'), findsOneWidget);
+      expect(find.text('rahul@example.com'), findsOneWidget);
+      expect(find.text('DOCTOR'), findsOneWidget);
+      expect(find.text('Dr. Test'), findsOneWidget);
+      expect(find.text('Physician'), findsOneWidget);
+      expect(find.text('CHEMIST'), findsOneWidget);
+      expect(find.text('Test Pharmacy'), findsOneWidget);
+      expect(find.text('123 Test St'), findsOneWidget);
+      expect(find.text('MEDICINES (1)'), findsOneWidget);
+      expect(find.text('Paracetamol'), findsOneWidget);
+      expect(find.text('₹250.00'), findsWidgets);
+      expect(find.text('Update Status'), findsOneWidget);
+    });
+
+    testWidgets('5. Status update workflow with confirmation dialog and Firestore protection', (tester) async {
+      final order = _createSampleOrder(status: 'pending');
+      final fakeOrderService = _FakeOrderService()..orders.add(order);
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            orderServiceProvider.overrideWithValue(fakeOrderService),
+          ],
+          child: MaterialApp(
+            home: AdminOrderDetailsScreen(
+              orderId: order.id,
+              initialOrder: order,
+            ),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      // Tap Update Status button
+      await tester.tap(find.text('Update Status'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Update Order Status'), findsOneWidget);
+      expect(find.text('Confirmed'), findsOneWidget);
+      expect(find.text('Delivered'), findsOneWidget);
+
+      // Select 'Confirmed'
+      await tester.tap(find.text('Confirmed'));
+      await tester.pumpAndSettle();
+
+      // Confirmation dialog appears
+      expect(find.text('Update Order Status?'), findsOneWidget);
+      expect(find.textContaining('from "PENDING" to "Confirmed"'), findsOneWidget);
+
+      // Tap Confirm
+      await tester.tap(find.text('Confirm'));
+      await tester.pumpAndSettle();
+
+      // Verify status was updated in service
+      expect(fakeOrderService.lastUpdatedOrderId, order.id);
+      expect(fakeOrderService.lastUpdatedStatus, 'confirmed');
+
+      // Verify protected fields remained identical
+      final updatedOrder = fakeOrderService.orders.first;
+      expect(updatedOrder.orderNumber, order.orderNumber);
+      expect(updatedOrder.representative, order.representative);
+      expect(updatedOrder.doctor, order.doctor);
+      expect(updatedOrder.chemist, order.chemist);
+      expect(updatedOrder.items.length, order.items.length);
+      expect(updatedOrder.totalAmount, order.totalAmount);
+      expect(updatedOrder.status, 'confirmed');
+    });
+
+    testWidgets('6. Admin dashboard Orders card navigates to AdminOrdersScreen', (tester) async {
+      final fakeOrderService = _FakeOrderService();
+      const testUser = AppUser(
+        uid: 'admin_uid',
+        email: 'admin@med.com',
+        name: 'Admin User',
+        phone: '+919876543210',
+        role: 'admin',
+        active: true,
+      );
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            orderServiceProvider.overrideWithValue(fakeOrderService),
+          ],
+          child: const MaterialApp(
+            home: AdminDashboardScreen(user: testUser),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      // Tap Orders card on Dashboard
+      await tester.ensureVisible(find.widgetWithText(Card, 'Orders'));
+      await tester.tap(find.widgetWithText(Card, 'Orders'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Orders Management'), findsOneWidget);
+    });
+  });
+
+  group('Dashboard Order Statistics & Filter Navigation Tests', () {
+    test('1-7. OrderStatistics counts and total value calculation across statuses', () {
+      final orders = [
+        _createSampleOrder(id: '1', status: 'pending', totalAmount: 100.0),
+        _createSampleOrder(id: '2', status: 'pending', totalAmount: 150.0),
+        _createSampleOrder(id: '3', status: 'confirmed', totalAmount: 300.0),
+        _createSampleOrder(id: '4', status: 'processing', totalAmount: 200.0),
+        _createSampleOrder(id: '5', status: 'processing', totalAmount: 250.0),
+        _createSampleOrder(id: '6', status: 'delivered', totalAmount: 400.0),
+        _createSampleOrder(id: '7', status: 'delivered', totalAmount: 500.0),
+        _createSampleOrder(id: '8', status: 'delivered', totalAmount: 600.0),
+        _createSampleOrder(id: '9', status: 'cancelled', totalAmount: 50.0),
+      ];
+
+      final stats = OrderStatistics.fromOrders(orders);
+
+      // 1. Total order count
+      expect(stats.totalOrders, 9);
+      // 2. Pending count
+      expect(stats.pendingOrders, 2);
+      // 3. Confirmed count
+      expect(stats.confirmedOrders, 1);
+      // 4. Processing count
+      expect(stats.processingOrders, 2);
+      // 5. Delivered count
+      expect(stats.deliveredOrders, 3);
+      // 6. Cancelled count
+      expect(stats.cancelledOrders, 1);
+      // 7. Total order value
+      expect(stats.totalOrderValue, 2550.0);
+    });
+
+    test('8. Empty order statistics safely defaults to 0 and 0.0 value', () {
+      final stats = OrderStatistics.fromOrders([]);
+      expect(stats.totalOrders, 0);
+      expect(stats.pendingOrders, 0);
+      expect(stats.confirmedOrders, 0);
+      expect(stats.processingOrders, 0);
+      expect(stats.deliveredOrders, 0);
+      expect(stats.cancelledOrders, 0);
+      expect(stats.totalOrderValue, 0.0);
+    });
+
+    testWidgets('9. Admin statistics calculation derived from all orders and displayed in UI', (tester) async {
+      final fakeOrderService = _FakeOrderService();
+      fakeOrderService.orders.addAll([
+        _createSampleOrder(id: 'o1', repId: 'rep_1', status: 'pending', totalAmount: 1000.0),
+        _createSampleOrder(id: 'o2', repId: 'rep_2', status: 'confirmed', totalAmount: 2500.0),
+        _createSampleOrder(id: 'o3', repId: 'rep_1', status: 'processing', totalAmount: 1500.0),
+        _createSampleOrder(id: 'o4', repId: 'rep_3', status: 'delivered', totalAmount: 5000.0),
+        _createSampleOrder(id: 'o5', repId: 'rep_2', status: 'cancelled', totalAmount: 500.0),
+      ]);
+
+      const adminUser = AppUser(
+        uid: 'admin_1',
+        email: 'admin@med.com',
+        name: 'Admin Boss',
+        phone: '+919876543210',
+        role: 'admin',
+        active: true,
+      );
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            orderServiceProvider.overrideWithValue(fakeOrderService),
+          ],
+          child: const MaterialApp(
+            home: AdminDashboardScreen(user: adminUser),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      await tester.ensureVisible(find.text('Order Overview'));
+      expect(find.text('Order Overview'), findsOneWidget);
+      expect(find.text('Total Orders'), findsOneWidget);
+      expect(find.text('Total Value'), findsOneWidget);
+
+      expect(find.text('5'), findsOneWidget);
+      expect(find.text('₹10,500'), findsOneWidget);
+    });
+
+    testWidgets('10. Representative statistics calculation derived from my orders and displayed in UI', (tester) async {
+      final fakeOrderService = _FakeOrderService();
+      fakeOrderService.orders.addAll([
+        _createSampleOrder(id: 'rep_o1', repId: 'rep_mine', status: 'pending', totalAmount: 1200.0),
+        _createSampleOrder(id: 'rep_o2', repId: 'rep_mine', status: 'confirmed', totalAmount: 800.0),
+        _createSampleOrder(id: 'rep_o3', repId: 'rep_mine', status: 'delivered', totalAmount: 2000.0),
+      ]);
+
+      const repUser = AppUser(
+        uid: 'rep_mine',
+        email: 'rep@med.com',
+        name: 'Field Rep',
+        phone: '+919876543211',
+        role: 'medical_rep',
+        active: true,
+      );
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            orderServiceProvider.overrideWithValue(fakeOrderService),
+            authStateProvider.overrideWith(
+              (ref) => Stream.value(_MockUserWithUid('rep_mine')),
+            ),
+          ],
+          child: const MaterialApp(
+            home: RepresentativeDashboardScreen(user: repUser),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      await tester.ensureVisible(find.text('My Order Overview'));
+      expect(find.text('My Order Overview'), findsOneWidget);
+      expect(find.text('My Order Value'), findsOneWidget);
+
+      expect(find.text('3'), findsOneWidget);
+      expect(find.text('₹4,000'), findsOneWidget);
+    });
+
+    test('11. Representative statistics use only representative orders, excluding others', () async {
+      final fakeOrderService = _FakeOrderService();
+      fakeOrderService.orders.addAll([
+        _createSampleOrder(id: 'r1_1', repId: 'rep_1', status: 'delivered', totalAmount: 1000.0),
+        _createSampleOrder(id: 'r1_2', repId: 'rep_1', status: 'delivered', totalAmount: 2000.0),
+        _createSampleOrder(id: 'r2_1', repId: 'rep_2', status: 'delivered', totalAmount: 50000.0),
+      ]);
+
+      final container = ProviderContainer(
+        overrides: [
+          orderServiceProvider.overrideWithValue(fakeOrderService),
+          authStateProvider.overrideWith(
+            (ref) => Stream.value(_MockUserWithUid('rep_1')),
+          ),
+        ],
+      );
+
+      final repCompleter = Completer<OrderStatistics>();
+      final adminCompleter = Completer<OrderStatistics>();
+
+      final repSub = container.listen<AsyncValue<OrderStatistics>>(
+        representativeOrderStatisticsProvider,
+        (_, next) {
+          if (next.hasValue && !repCompleter.isCompleted) {
+            repCompleter.complete(next.value!);
+          }
+        },
+        fireImmediately: true,
+      );
+
+      final adminSub = container.listen<AsyncValue<OrderStatistics>>(
+        adminOrderStatisticsProvider,
+        (_, next) {
+          if (next.hasValue && !adminCompleter.isCompleted) {
+            adminCompleter.complete(next.value!);
+          }
+        },
+        fireImmediately: true,
+      );
+
+      final repStats = await repCompleter.future;
+      expect(repStats.totalOrders, 2);
+      expect(repStats.deliveredOrders, 2);
+      expect(repStats.totalOrderValue, 3000.0);
+
+      final adminStats = await adminCompleter.future;
+      expect(adminStats.totalOrders, 3);
+      expect(adminStats.deliveredOrders, 3);
+      expect(adminStats.totalOrderValue, 53000.0);
+
+      repSub.close();
+      adminSub.close();
+      container.dispose();
+    });
+
+    testWidgets('12. Status-card filter navigation for Admin Dashboard', (tester) async {
+      tester.view.physicalSize = const Size(1200, 1600);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+
+      final fakeOrderService = _FakeOrderService();
+      fakeOrderService.orders.addAll([
+        _createSampleOrder(id: 'adm_1', repId: 'rep_user', status: 'pending', totalAmount: 500.0),
+        _createSampleOrder(id: 'adm_2', repId: 'rep_user', status: 'delivered', totalAmount: 1200.0),
+      ]);
+
+      const adminUser = AppUser(
+        uid: 'admin_1',
+        email: 'admin@med.com',
+        name: 'Admin Boss',
+        phone: '+919876543210',
+        role: 'admin',
+        active: true,
+      );
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            orderServiceProvider.overrideWithValue(fakeOrderService),
+            doctorsStreamProvider.overrideWith((ref) => Stream.value([])),
+            chemistsStreamProvider.overrideWith((ref) => Stream.value([])),
+            medicalRepsStreamProvider.overrideWith((ref) => Stream.value([])),
+          ],
+          child: const MaterialApp(
+            home: AdminDashboardScreen(user: adminUser),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      final adminPendingCard = find.descendant(
+        of: find.byType(OrderOverviewSection),
+        matching: find.text('Pending'),
+      );
+      await tester.tap(adminPendingCard);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Orders Management'), findsOneWidget);
+      final pendingFilterChip = tester.widget<FilterChip>(
+        find.widgetWithText(FilterChip, 'Pending'),
+      );
+      expect(pendingFilterChip.selected, isTrue);
+    });
+
+    testWidgets('13. Status-card filter navigation for Representative Dashboard', (tester) async {
+      tester.view.physicalSize = const Size(1200, 1600);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+
+      final fakeOrderService = _FakeOrderService();
+      fakeOrderService.orders.addAll([
+        _createSampleOrder(id: 'rep_1', repId: 'rep_user', status: 'pending', totalAmount: 500.0),
+        _createSampleOrder(id: 'rep_2', repId: 'rep_user', status: 'delivered', totalAmount: 1200.0),
+      ]);
+
+      const repUser = AppUser(
+        uid: 'rep_user',
+        email: 'rep@med.com',
+        name: 'Field Rep',
+        phone: '+919876543211',
+        role: 'medical_rep',
+        active: true,
+      );
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            orderServiceProvider.overrideWithValue(fakeOrderService),
+            authStateProvider.overrideWith(
+              (ref) => Stream.value(_MockUserWithUid('rep_user')),
+            ),
+          ],
+          child: const MaterialApp(
+            home: RepresentativeDashboardScreen(user: repUser),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      final repDeliveredCard = find.descendant(
+        of: find.byType(OrderOverviewSection),
+        matching: find.text('Delivered'),
+      );
+      await tester.tap(repDeliveredCard);
+      await tester.pumpAndSettle();
+
+      expect(find.text('My Orders'), findsOneWidget);
+      final deliveredFilterChip = tester.widget<FilterChip>(
+        find.widgetWithText(FilterChip, 'Delivered'),
+      );
+      expect(deliveredFilterChip.selected, isTrue);
+    });
+  });
+
+  group('PDF Order / Invoice Generation Tests', () {
+    test('1. PDF service accepts an OrderModel and generates valid PDF bytes', () async {
+      TestWidgetsFlutterBinding.ensureInitialized();
+      final order = _createSampleOrder();
+      final bytes = await OrderPdfService.generateOrderPdf(order);
+      expect(bytes, isNotEmpty);
+      expect(bytes.length, greaterThan(100));
+      final header = String.fromCharCodes(bytes.take(5));
+      expect(header, equals('%PDF-'));
+    });
+
+    test('2. PDF generation handles multiple order items', () async {
+      TestWidgetsFlutterBinding.ensureInitialized();
+      final items = List.generate(
+        15,
+        (i) => OrderItem(
+          medicineId: 'med_$i',
+          medicineName: 'Medicine Item #$i',
+          brand: 'PharmaBrand $i',
+          composition: 'Active Formula $i',
+          variantId: 'var_$i',
+          form: 'Tablet',
+          strength: '${(i + 1) * 100} mg',
+          packSize: '10x10',
+          mrp: (i + 1) * 50.0,
+          supplierPrice: (i + 1) * 40.0,
+          quantity: i + 1,
+          itemTotal: (i + 1) * 40.0 * (i + 1),
+        ),
+      );
+      final multiItemOrder = OrderModel(
+        id: 'ord_multi',
+        orderNumber: 'ORD-20260927-9999',
+        representative: const {
+          'id': 'rep_1',
+          'name': 'Rahul Sharma',
+          'email': 'rahul@med.com',
+        },
+        doctor: const {
+          'id': 'doc_1',
+          'name': 'Dr. Gupta',
+          'specialization': 'Cardiology',
+          'phone': '9876543210',
+        },
+        chemist: const {
+          'id': 'chm_1',
+          'name': 'Apollo Pharmacy',
+          'phone': '9876543211',
+          'address': 'Koramangala, Bangalore',
+        },
+        items: items,
+        totalItems: items.length,
+        totalQuantity: items.fold<int>(0, (sum, item) => sum + item.quantity),
+        totalAmount: items.fold<double>(0.0, (sum, item) => sum + item.itemTotal),
+        status: 'confirmed',
+        createdAt: DateTime(2026, 9, 27, 10, 30),
+        updatedAt: DateTime(2026, 9, 27, 10, 30),
+      );
+
+      final bytes = await OrderPdfService.generateOrderPdf(multiItemOrder);
+      expect(bytes, isNotEmpty);
+      expect(String.fromCharCodes(bytes.take(5)), equals('%PDF-'));
+    });
+
+    test('3. PDF generation handles an empty item list and null timestamp safely', () async {
+      TestWidgetsFlutterBinding.ensureInitialized();
+      final emptyOrder = OrderModel(
+        id: 'ord_empty',
+        orderNumber: 'ORD-20260927-0000',
+        representative: const {'id': 'r', 'name': 'Rep', 'email': 'r@med.com'},
+        doctor: const {'id': 'd', 'name': 'Doc', 'specialization': 'General', 'phone': '123'},
+        chemist: const {'id': 'c', 'name': 'Chemist', 'phone': '123', 'address': 'Main St'},
+        items: const [],
+        totalItems: 0,
+        totalQuantity: 0,
+        totalAmount: 0.0,
+        status: 'pending',
+        createdAt: null,
+        updatedAt: null,
+      );
+
+      final bytes = await OrderPdfService.generateOrderPdf(emptyOrder);
+      expect(bytes, isNotEmpty);
+      expect(String.fromCharCodes(bytes.take(5)), equals('%PDF-'));
+    });
+
+    test('4. Currency formatting with showDecimals and Indian numbering', () {
+      expect(formatCurrency(125450.0, showDecimals: true), '₹1,25,450.00');
+      expect(formatCurrency(125450.0), '₹1,25,450');
+      expect(formatCurrency(0.0, showDecimals: true), '₹0.00');
+      expect(formatCurrency(48500.5, showDecimals: true), '₹48,500.50');
+      expect(formatCurrency(500.0, showDecimals: true), '₹500.00');
+    });
+
+    test('5. Historical snapshot values are preserved and used', () {
+      final historicalOrder = OrderModel(
+        id: 'ord_hist',
+        orderNumber: 'ORD-20260901-0001',
+        representative: const {
+          'id': 'rep_old',
+          'name': 'Former Rep Name',
+          'email': 'former@med.com',
+        },
+        doctor: const {
+          'id': 'doc_old',
+          'name': 'Dr. Retired',
+          'specialization': 'Neurology',
+          'phone': '1112223333',
+        },
+        chemist: const {
+          'id': 'chm_old',
+          'name': 'Relocated Chemist',
+          'phone': '4445556666',
+          'address': 'Old Market Road',
+        },
+        items: const [
+          OrderItem(
+            medicineId: 'med_old',
+            medicineName: 'Discontinued Med',
+            brand: 'Legacy Brand',
+            composition: 'Old Formula',
+            variantId: 'var_old',
+            form: 'Capsule',
+            strength: '250 mg',
+            packSize: '30 caps',
+            mrp: 120.0,
+            supplierPrice: 100.0,
+            quantity: 2,
+            itemTotal: 200.0,
+          ),
+        ],
+        totalItems: 1,
+        totalQuantity: 2,
+        totalAmount: 200.0,
+        status: 'delivered',
+        createdAt: DateTime(2026, 9, 1),
+      );
+
+      expect(historicalOrder.representativeName, 'Former Rep Name');
+      expect(historicalOrder.doctorName, 'Dr. Retired');
+      expect(historicalOrder.chemistName, 'Relocated Chemist');
+      expect(historicalOrder.items.first.medicineName, 'Discontinued Med');
+    });
+
+    test('6. CompanyConfig default configuration values', () {
+      expect(CompanyConfig.companyName, 'Medical Supplier');
+      expect(CompanyConfig.documentTitle, 'Medicine Order');
+    });
+
+    testWidgets('7. RepresentativeOrderDetailsScreen renders Generate PDF button and action', (tester) async {
+      final order = _createSampleOrder();
+      final fakeOrderService = _FakeOrderService()..orders.add(order);
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            orderServiceProvider.overrideWithValue(fakeOrderService),
+          ],
+          child: MaterialApp(
+            home: RepresentativeOrderDetailsScreen(
+              orderId: order.id,
+              initialOrder: order,
+            ),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      // Check AppBar action icon
+      expect(find.byTooltip('Generate PDF'), findsOneWidget);
+
+      // Check prominent button in body
+      expect(find.widgetWithText(ElevatedButton, 'Generate PDF'), findsOneWidget);
+    });
+
+    testWidgets('8. AdminOrderDetailsScreen renders Generate PDF button and action', (tester) async {
+      final order = _createSampleOrder();
+      final fakeOrderService = _FakeOrderService()..orders.add(order);
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            orderServiceProvider.overrideWithValue(fakeOrderService),
+          ],
+          child: MaterialApp(
+            home: AdminOrderDetailsScreen(
+              orderId: order.id,
+              initialOrder: order,
+            ),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      // Check AppBar action icon
+      expect(find.byTooltip('Generate PDF'), findsOneWidget);
+
+      // Check prominent button in body
+      await tester.ensureVisible(find.widgetWithText(OutlinedButton, 'Generate PDF'));
+      expect(find.widgetWithText(OutlinedButton, 'Generate PDF'), findsOneWidget);
+    });
+  });
+
+  group('Admin Reports & Analytics Tests', () {
+    final fixedNow = DateTime(2026, 9, 27, 12, 0, 0);
+
+    OrderModel makeTestOrder({
+      required String id,
+      required String orderNumber,
+      required DateTime createdAt,
+      String status = 'confirmed',
+      String repId = 'rep_1',
+      String repName = 'Rahul Sharma',
+      String repEmail = 'rahul@med.com',
+      String docId = 'doc_1',
+      String docName = 'Dr. Gupta',
+      String chmId = 'chm_1',
+      String chmName = 'Apollo Bangalore',
+      List<OrderItem>? items,
+      double totalAmount = 1000.0,
+      int totalItems = 1,
+      int totalQuantity = 10,
+    }) {
+      return OrderModel(
+        id: id,
+        orderNumber: orderNumber,
+        representative: {
+          'id': repId,
+          'name': repName,
+          'email': repEmail,
+        },
+        doctor: {
+          'id': docId,
+          'name': docName,
+          'specialization': 'General Physician',
+          'phone': '9876543210',
+        },
+        chemist: {
+          'id': chmId,
+          'name': chmName,
+          'phone': '9876543211',
+          'address': 'MG Road, Bangalore',
+        },
+        items: items ??
+            [
+              OrderItem(
+                medicineId: 'med_1',
+                medicineName: 'Paracetamol',
+                brand: 'HealthCorp',
+                composition: 'PCM 500mg',
+                variantId: 'var_1',
+                form: 'Tablet',
+                strength: '500 mg',
+                packSize: '10x10',
+                mrp: 120.0,
+                supplierPrice: 100.0,
+                quantity: totalQuantity,
+                itemTotal: totalAmount,
+              ),
+            ],
+        totalItems: totalItems,
+        totalQuantity: totalQuantity,
+        totalAmount: totalAmount,
+        status: status,
+        createdAt: createdAt,
+        updatedAt: createdAt,
+      );
+    }
+
+    test('1. Summary total orders', () {
+      final orders = [
+        makeTestOrder(id: '1', orderNumber: 'ORD-01', createdAt: fixedNow),
+        makeTestOrder(id: '2', orderNumber: 'ORD-02', createdAt: fixedNow),
+        makeTestOrder(id: '3', orderNumber: 'ORD-03', createdAt: fixedNow),
+      ];
+      final report = OrderReportService.generateReport(
+        orders: orders,
+        dateRange: const ReportDateRange.allTime(),
+        referenceNow: fixedNow,
+      );
+      expect(report.statistics.totalOrders, 3);
+    });
+
+    test('2. Summary total order value', () {
+      final orders = [
+        makeTestOrder(id: '1', orderNumber: 'ORD-01', totalAmount: 1200.0, createdAt: fixedNow),
+        makeTestOrder(id: '2', orderNumber: 'ORD-02', totalAmount: 800.0, createdAt: fixedNow),
+      ];
+      final report = OrderReportService.generateReport(
+        orders: orders,
+        dateRange: const ReportDateRange.allTime(),
+        referenceNow: fixedNow,
+      );
+      expect(report.statistics.totalOrderValue, 2000.0);
+    });
+
+    test('3. Status breakdown', () {
+      final orders = [
+        makeTestOrder(id: '1', orderNumber: 'ORD-01', status: 'pending', totalAmount: 100.0, createdAt: fixedNow),
+        makeTestOrder(id: '2', orderNumber: 'ORD-02', status: 'confirmed', totalAmount: 200.0, createdAt: fixedNow),
+        makeTestOrder(id: '3', orderNumber: 'ORD-03', status: 'processing', totalAmount: 300.0, createdAt: fixedNow),
+        makeTestOrder(id: '4', orderNumber: 'ORD-04', status: 'delivered', totalAmount: 400.0, createdAt: fixedNow),
+        makeTestOrder(id: '5', orderNumber: 'ORD-05', status: 'cancelled', totalAmount: 50.0, createdAt: fixedNow),
+      ];
+      final report = OrderReportService.generateReport(
+        orders: orders,
+        dateRange: const ReportDateRange.allTime(),
+        referenceNow: fixedNow,
+      );
+      expect(report.statusBreakdown.length, 5);
+
+      final pendingItem = report.statusBreakdown.firstWhere((s) => s.status == 'pending');
+      expect(pendingItem.count, 1);
+      expect(pendingItem.percentage, 20.0);
+      expect(pendingItem.totalValue, 100.0);
+
+      final deliveredItem = report.statusBreakdown.firstWhere((s) => s.status == 'delivered');
+      expect(deliveredItem.count, 1);
+      expect(deliveredItem.percentage, 20.0);
+      expect(deliveredItem.totalValue, 400.0);
+    });
+
+    test('4. Date range filtering', () {
+      final orderWithDate = makeTestOrder(id: '1', orderNumber: 'ORD-01', createdAt: fixedNow);
+      final orderWithoutDate = makeTestOrder(id: '2', orderNumber: 'ORD-02', createdAt: fixedNow);
+      final orderNullDate = OrderModel(
+        id: '3',
+        orderNumber: 'ORD-03',
+        representative: orderWithDate.representative,
+        doctor: orderWithDate.doctor,
+        chemist: orderWithDate.chemist,
+        items: const [],
+        totalItems: 0,
+        totalQuantity: 0,
+        totalAmount: 100.0,
+        status: 'pending',
+        createdAt: null,
+      );
+
+      final allReport = OrderReportService.generateReport(
+        orders: [orderWithDate, orderWithoutDate, orderNullDate],
+        dateRange: const ReportDateRange.allTime(),
+        referenceNow: fixedNow,
+      );
+      expect(allReport.statistics.totalOrders, 3);
+
+      final todayReport = OrderReportService.generateReport(
+        orders: [orderWithDate, orderWithoutDate, orderNullDate],
+        dateRange: const ReportDateRange.today(),
+        referenceNow: fixedNow,
+      );
+      // Null date is excluded safely from today's range
+      expect(todayReport.statistics.totalOrders, 2);
+    });
+
+    test('5. Today filtering', () {
+      final todayOrder = makeTestOrder(id: '1', orderNumber: 'ORD-TODAY', createdAt: fixedNow);
+      final yesterdayOrder = makeTestOrder(
+        id: '2',
+        orderNumber: 'ORD-YEST',
+        createdAt: fixedNow.subtract(const Duration(days: 1)),
+      );
+
+      final report = OrderReportService.generateReport(
+        orders: [todayOrder, yesterdayOrder],
+        dateRange: const ReportDateRange.today(),
+        referenceNow: fixedNow,
+      );
+      expect(report.statistics.totalOrders, 1);
+      expect(report.filteredOrders.first.orderNumber, 'ORD-TODAY');
+    });
+
+    test('6. Last 7 days filtering', () {
+      final day3Order = makeTestOrder(
+        id: '1',
+        orderNumber: 'ORD-DAY3',
+        createdAt: fixedNow.subtract(const Duration(days: 3)),
+      );
+      final day10Order = makeTestOrder(
+        id: '2',
+        orderNumber: 'ORD-DAY10',
+        createdAt: fixedNow.subtract(const Duration(days: 10)),
+      );
+
+      final report = OrderReportService.generateReport(
+        orders: [day3Order, day10Order],
+        dateRange: const ReportDateRange.last7Days(),
+        referenceNow: fixedNow,
+      );
+      expect(report.statistics.totalOrders, 1);
+      expect(report.filteredOrders.first.orderNumber, 'ORD-DAY3');
+    });
+
+    test('7. Last 30 days filtering', () {
+      final day20Order = makeTestOrder(
+        id: '1',
+        orderNumber: 'ORD-DAY20',
+        createdAt: fixedNow.subtract(const Duration(days: 20)),
+      );
+      final day40Order = makeTestOrder(
+        id: '2',
+        orderNumber: 'ORD-DAY40',
+        createdAt: fixedNow.subtract(const Duration(days: 40)),
+      );
+
+      final report = OrderReportService.generateReport(
+        orders: [day20Order, day40Order],
+        dateRange: const ReportDateRange.last30Days(),
+        referenceNow: fixedNow,
+      );
+      expect(report.statistics.totalOrders, 1);
+      expect(report.filteredOrders.first.orderNumber, 'ORD-DAY20');
+    });
+
+    test('8. Custom date range', () {
+      final orderAug = makeTestOrder(
+        id: '1',
+        orderNumber: 'ORD-AUG',
+        createdAt: DateTime(2026, 8, 15),
+      );
+      final orderSep1 = makeTestOrder(
+        id: '2',
+        orderNumber: 'ORD-SEP01',
+        createdAt: DateTime(2026, 9, 1),
+      );
+      final orderSep10 = makeTestOrder(
+        id: '3',
+        orderNumber: 'ORD-SEP10',
+        createdAt: DateTime(2026, 9, 10),
+      );
+      final orderOct = makeTestOrder(
+        id: '4',
+        orderNumber: 'ORD-OCT',
+        createdAt: DateTime(2026, 10, 1),
+      );
+
+      final report = OrderReportService.generateReport(
+        orders: [orderAug, orderSep1, orderSep10, orderOct],
+        dateRange: ReportDateRange.custom(
+          startDate: DateTime(2026, 9, 1),
+          endDate: DateTime(2026, 9, 15),
+        ),
+        referenceNow: fixedNow,
+      );
+      expect(report.statistics.totalOrders, 2);
+      expect(report.filteredOrders.map((o) => o.orderNumber).toList(), ['ORD-SEP01', 'ORD-SEP10']);
+    });
+
+    test('9. Orders by representative', () {
+      final orders = [
+        makeTestOrder(id: '1', orderNumber: '1', repId: 'r1', repName: 'Rahul', totalAmount: 1000, createdAt: fixedNow),
+        makeTestOrder(id: '2', orderNumber: '2', repId: 'r1', repName: 'Rahul', totalAmount: 1500, createdAt: fixedNow),
+        makeTestOrder(id: '3', orderNumber: '3', repId: 'r2', repName: 'Priya', totalAmount: 5000, createdAt: fixedNow),
+      ];
+
+      final report = OrderReportService.generateReport(
+        orders: orders,
+        dateRange: const ReportDateRange.allTime(),
+        referenceNow: fixedNow,
+      );
+
+      expect(report.representativeBreakdown.length, 2);
+      // Rahul has 2 orders, Priya has 1 order -> Rahul is #1 by order count
+      expect(report.representativeBreakdown[0].representativeName, 'Rahul');
+      expect(report.representativeBreakdown[0].orderCount, 2);
+      expect(report.representativeBreakdown[0].totalValue, 2500);
+
+      expect(report.representativeBreakdown[1].representativeName, 'Priya');
+      expect(report.representativeBreakdown[1].orderCount, 1);
+      expect(report.representativeBreakdown[1].totalValue, 5000);
+    });
+
+    test('10. Top medicines calculation', () {
+      const itemA = OrderItem(
+        medicineId: 'm1',
+        medicineName: 'Amoxicillin',
+        brand: 'BrandA',
+        composition: 'Amox 500',
+        variantId: 'v1',
+        form: 'Cap',
+        strength: '500mg',
+        packSize: '10',
+        mrp: 100,
+        supplierPrice: 80,
+        quantity: 50,
+        itemTotal: 4000,
+      );
+      const itemB = OrderItem(
+        medicineId: 'm2',
+        medicineName: 'Azithromycin',
+        brand: 'BrandB',
+        composition: 'Azith 250',
+        variantId: 'v2',
+        form: 'Tab',
+        strength: '250mg',
+        packSize: '6',
+        mrp: 150,
+        supplierPrice: 120,
+        quantity: 10,
+        itemTotal: 1200,
+      );
+
+      final o1 = makeTestOrder(id: '1', orderNumber: 'O1', items: [itemA, itemB], createdAt: fixedNow);
+      final o2 = makeTestOrder(id: '2', orderNumber: 'O2', items: [itemA], createdAt: fixedNow);
+
+      final report = OrderReportService.generateReport(
+        orders: [o1, o2],
+        dateRange: const ReportDateRange.allTime(),
+        referenceNow: fixedNow,
+      );
+
+      expect(report.topMedicines.length, 2);
+      // Amoxicillin has quantity 100, in 2 orders -> rank #1
+      expect(report.topMedicines[0].medicineName, 'Amoxicillin');
+      expect(report.topMedicines[0].totalQuantity, 100);
+      expect(report.topMedicines[0].orderCount, 2);
+      expect(report.topMedicines[0].totalValue, 8000);
+
+      // Azithromycin has quantity 10, in 1 order -> rank #2
+      expect(report.topMedicines[1].medicineName, 'Azithromycin');
+      expect(report.topMedicines[1].totalQuantity, 10,);
+      expect(report.topMedicines[1].orderCount, 1);
+    });
+
+    test('11. Top chemists calculation', () {
+      final orders = [
+        makeTestOrder(id: '1', orderNumber: '1', chmId: 'c1', chmName: 'Apollo', totalAmount: 2000, createdAt: fixedNow),
+        makeTestOrder(id: '2', orderNumber: '2', chmId: 'c2', chmName: 'MedPlus', totalAmount: 8000, createdAt: fixedNow),
+        makeTestOrder(id: '3', orderNumber: '3', chmId: 'c1', chmName: 'Apollo', totalAmount: 1000, createdAt: fixedNow),
+      ];
+
+      final report = OrderReportService.generateReport(
+        orders: orders,
+        dateRange: const ReportDateRange.allTime(),
+        referenceNow: fixedNow,
+      );
+
+      expect(report.topChemists.length, 2);
+      // MedPlus has 8000 total value -> rank #1 (sorted by totalValue descending)
+      expect(report.topChemists[0].chemistName, 'MedPlus');
+      expect(report.topChemists[0].totalValue, 8000);
+      expect(report.topChemists[0].orderCount, 1);
+
+      // Apollo has 3000 total value -> rank #2
+      expect(report.topChemists[1].chemistName, 'Apollo');
+      expect(report.topChemists[1].totalValue, 3000);
+      expect(report.topChemists[1].orderCount, 2);
+    });
+
+    test('12. Order trend calculation', () {
+      final orders = [
+        makeTestOrder(id: '1', orderNumber: '1', createdAt: DateTime(2026, 9, 25), totalAmount: 500),
+        makeTestOrder(id: '2', orderNumber: '2', createdAt: DateTime(2026, 9, 25), totalAmount: 500),
+        makeTestOrder(id: '3', orderNumber: '3', createdAt: DateTime(2026, 9, 26), totalAmount: 1200),
+      ];
+
+      final report = OrderReportService.generateReport(
+        orders: orders,
+        dateRange: const ReportDateRange.last7Days(),
+        referenceNow: fixedNow,
+      );
+
+      expect(report.orderTrend.length, 2);
+      expect(report.orderTrend[0].orderCount, 2);
+      expect(report.orderTrend[0].totalValue, 1000);
+      expect(report.orderTrend[1].orderCount, 1);
+      expect(report.orderTrend[1].totalValue, 1200);
+    });
+
+    testWidgets('13. Empty report displays friendly message', (tester) async {
+      final fakeOrderService = _FakeOrderService();
+      const admin = AppUser(
+        uid: 'adm',
+        name: 'Admin',
+        email: 'adm@med.com',
+        role: 'admin',
+        phone: '123',
+        active: true,
+      );
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            orderServiceProvider.overrideWithValue(fakeOrderService),
+            userProfileProvider.overrideWith((ref) => Stream.value(admin)),
+          ],
+          child: const MaterialApp(
+            home: AdminReportsScreen(),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      expect(find.text('Reports & Analytics'), findsOneWidget);
+      expect(find.text('No orders found for this period.'), findsOneWidget);
+      expect(find.text('View All Time'), findsOneWidget);
+    });
+
+    testWidgets('14. Representative cannot access admin reports through navigation/auth logic', (tester) async {
+      final fakeOrderService = _FakeOrderService();
+      const repUser = AppUser(
+        uid: 'rep_123',
+        name: 'Field Rep',
+        email: 'rep@med.com',
+        role: 'medical_rep',
+        phone: '123',
+        active: true,
+      );
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            orderServiceProvider.overrideWithValue(fakeOrderService),
+            userProfileProvider.overrideWith((ref) => Stream.value(repUser)),
+          ],
+          child: const MaterialApp(
+            home: AdminReportsScreen(),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      // Guard check: access denied rendered
+      expect(find.text('Access Denied'), findsOneWidget);
+      expect(
+        find.text('Only administrators have access to Reports & Analytics.'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('15. Existing dashboard functionality remains intact', (tester) async {
+      final fakeOrderService = _FakeOrderService();
+      const admin = AppUser(
+        uid: 'adm_boss',
+        name: 'Boss',
+        email: 'boss@med.com',
+        role: 'admin',
+        phone: '123',
+        active: true,
+      );
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            orderServiceProvider.overrideWithValue(fakeOrderService),
+            userProfileProvider.overrideWith((ref) => Stream.value(admin)),
+            doctorsStreamProvider.overrideWith((ref) => Stream.value([])),
+            chemistsStreamProvider.overrideWith((ref) => Stream.value([])),
+            medicalRepsStreamProvider.overrideWith((ref) => Stream.value([])),
+          ],
+          child: const MaterialApp(
+            home: AdminDashboardScreen(user: admin),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      expect(find.text('Welcome, Boss'), findsOneWidget);
+      expect(find.text('Order Overview'), findsOneWidget);
+      expect(find.text('Reports'), findsOneWidget);
+    });
+  });
+
+  group('New Requirements & Custom Workflows Tests', () {
+    testWidgets('AddMedicineScreen validates initial variant fields when variant is enabled',
+        (tester) async {
+      await tester.pumpWidget(
+        const ProviderScope(
+          child: MaterialApp(
+            home: AddMedicineScreen(),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      // Enter medicine name
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Medicine Name *'),
+        'Amoxicillin',
+      );
+
+      // Try submitting without MRP (initial variant is enabled by default)
+      final submitBtn =
+          find.widgetWithText(ElevatedButton, 'Create Medicine & Variant');
+      await tester.ensureVisible(submitBtn);
+      await tester.tap(submitBtn);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Please enter MRP'), findsOneWidget);
+
+      // Enter MRP 50 and Supplier Price 60 (exceeds MRP)
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'MRP (₹) *'),
+        '50',
+      );
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Supplier Price (₹) *'),
+        '60',
+      );
+      await tester.ensureVisible(submitBtn);
+      await tester.tap(submitBtn);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Cannot exceed MRP'), findsOneWidget);
+    });
+
+    testWidgets('CreateOrderScreen Skip Doctor navigates to Chemist tab with Direct Order',
+        (tester) async {
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            activeDoctorsStreamProvider.overrideWith((ref) => Stream.value([])),
+            activeChemistsStreamProvider.overrideWith((ref) => Stream.value([])),
+          ],
+          child: const MaterialApp(
+            home: CreateOrderScreen(),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      // Tap Skip Doctor
+      await tester.tap(find.text('Skip Doctor'));
+      await tester.pumpAndSettle();
+
+      // Should show SnackBar message
+      expect(
+        find.text('Doctor skipped. Now select or enter a chemist.'),
+        findsOneWidget,
+      );
+
+      // Should display Direct Order in status chip
+      expect(find.text('Direct Order (No Doctor)'), findsOneWidget);
+    });
+
+    testWidgets('CreateOrderScreen Custom Doctor dialog sets custom doctor',
+        (tester) async {
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            activeDoctorsStreamProvider.overrideWith((ref) => Stream.value([])),
+            activeChemistsStreamProvider.overrideWith((ref) => Stream.value([])),
+          ],
+          child: const MaterialApp(
+            home: CreateOrderScreen(),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      // Tap Custom Doctor
+      await tester.tap(find.text('Custom Doctor'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Custom Doctor'), findsWidgets);
+      expect(find.text('Use Doctor'), findsOneWidget);
+
+      // Enter custom doctor name and submit dialog
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Doctor Name *'),
+        'Dr. Custom Practitioner',
+      );
+      await tester.tap(find.text('Use Doctor'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Dr. Custom Practitioner'), findsWidgets);
+    });
+
+    testWidgets('CreateOrderScreen Custom Chemist dialog sets custom chemist',
+        (tester) async {
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            activeDoctorsStreamProvider.overrideWith((ref) => Stream.value([])),
+            activeChemistsStreamProvider.overrideWith((ref) => Stream.value([])),
+          ],
+          child: const MaterialApp(
+            home: CreateOrderScreen(),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      // Switch to Chemist tab
+      await tester.tap(find.text('Select Chemist'));
+      await tester.pumpAndSettle();
+
+      // Tap Custom Chemist button
+      await tester.tap(find.text('Chemist not in list? Enter Custom Chemist'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Custom Chemist'), findsWidgets);
+      expect(find.text('Use Chemist'), findsOneWidget);
+
+      // Enter chemist name and submit dialog
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Chemist Name *'),
+        'Care Pharmacy',
+      );
+      await tester.tap(find.text('Use Chemist'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Care Pharmacy'), findsWidgets);
+      expect(find.text('Custom Chemist Selected'), findsOneWidget);
+    });
+
+    testWidgets('OrderSuccessScreen renders Generate PDF, View My Orders, and Back to Home',
+        (tester) async {
+      final sampleOrder = _createSampleOrder();
+
+      await tester.pumpWidget(
+        ProviderScope(
+          child: MaterialApp(
+            home: OrderSuccessScreen(order: sampleOrder),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      // Verify all 3 required action buttons are present
+      expect(find.text('Generate PDF'), findsOneWidget);
+      expect(find.text('View My Orders'), findsOneWidget);
+      expect(find.text('Back to Home'), findsOneWidget);
+
+      // Verify details
+      expect(find.text('Order Submitted'), findsOneWidget);
+      expect(find.text(sampleOrder.orderNumber), findsOneWidget);
+    });
+  });
+}
+
+OrderDraft _createSampleDraft() {
+  return const OrderDraft(
+    doctor: Doctor(
+      id: 'doc_1',
+      name: 'Dr. Test',
+      specialization: 'Physician',
+      phone: '9876543210',
+      active: true,
+    ),
+    chemist: Chemist(
+      id: 'chm_1',
+      name: 'Test Pharmacy',
+      phone: '9876543210',
+      address: '123 Test St',
+      active: true,
+    ),
+    items: [
+      OrderDraftItem(
+        medicineId: 'med_1',
+        medicineName: 'Paracetamol',
+        brand: 'Health',
+        composition: 'PCM 500mg',
+        variantId: 'var_1',
+        form: 'Tablet',
+        strength: '500 mg',
+        packSize: '10 tablets',
+        mrp: 60.0,
+        supplierPrice: 50.0,
+        quantity: 5,
+      ),
+    ],
+  );
+}
+
+OrderModel _createSampleOrder({
+  String id = 'ord_1',
+  String orderNumber = 'ORD-20260926-0001',
+  String repId = 'rep_current',
+  String status = 'pending',
+  double totalAmount = 250.0,
+}) {
+  return OrderModel(
+    id: id,
+    orderNumber: orderNumber,
+    representative: {
+      'id': repId,
+      'name': 'Rahul Sharma',
+      'email': 'rahul@example.com',
+    },
+    doctor: {
+      'id': 'doc_1',
+      'name': 'Dr. Test',
+      'specialization': 'Physician',
+      'phone': '9876543210',
+    },
+    chemist: {
+      'id': 'chm_1',
+      'name': 'Test Pharmacy',
+      'phone': '9876543210',
+      'address': '123 Test St',
+    },
+    items: const [
+      OrderItem(
+        medicineId: 'med_1',
+        medicineName: 'Paracetamol',
+        brand: 'Health',
+        composition: 'PCM 500mg',
+        variantId: 'var_1',
+        form: 'Tablet',
+        strength: '500 mg',
+        packSize: '10 tablets',
+        mrp: 60.0,
+        supplierPrice: 50.0,
+        quantity: 5,
+        itemTotal: 250.0,
+      ),
+    ],
+    totalItems: 1,
+    totalQuantity: 5,
+    totalAmount: totalAmount,
+    status: status,
+    createdAt: DateTime.now(),
+    updatedAt: DateTime.now(),
+  );
+}
+
+class _FakeOrderService extends OrderService {
+  final List<OrderModel> orders = [];
+  bool shouldFail = false;
+  Completer<OrderModel>? submitCompleter;
+  int submissionAttempts = 0;
+
+  @override
+  Future<String> generateOrderNumber() async {
+    return 'ORD-20260926-0001';
+  }
+
+  @override
+  Future<OrderModel> createOrder({
+    required OrderDraft draft,
+    AppUser? representativeProfile,
+  }) async {
+    submissionAttempts++;
+    if (submitCompleter != null) {
+      return submitCompleter!.future;
+    }
+    if (shouldFail) {
+      throw Exception('Network error');
+    }
+    final order = OrderModel(
+      id: 'ORDER_123',
+      orderNumber: 'ORD-20260926-0001',
+      representative: {
+        'id': 'rep_uid',
+        'name': 'Rahul Sharma',
+        'email': 'rahul@example.com',
+      },
+      doctor: {
+        'id': draft.doctorId,
+        'name': draft.doctorName,
+        'specialization': draft.doctorSpecialization,
+        'phone': draft.doctorPhone,
+      },
+      chemist: {
+        'id': draft.chemistId,
+        'name': draft.chemistName,
+        'phone': draft.chemistPhone,
+        'address': draft.chemistAddress,
+      },
+      items: draft.items.map((i) => OrderItem.fromDraftItem(i)).toList(),
+      totalItems: draft.totalItems,
+      totalQuantity: draft.totalQuantity,
+      totalAmount: draft.totalAmount,
+      status: 'pending',
+      createdAt: DateTime.now(),
+      updatedAt: DateTime.now(),
+    );
+    orders.add(order);
+    return order;
+  }
+
+  @override
+  Stream<List<OrderModel>> watchMyOrders(String representativeId) {
+    return Stream.value(
+      orders.where((o) => o.representativeId == representativeId).toList(),
+    );
+  }
+
+  @override
+  Stream<OrderModel?> watchOrder(String orderId) {
+    try {
+      final order = orders.firstWhere((o) => o.id == orderId);
+      return Stream.value(order);
+    } catch (_) {
+      return Stream.value(null);
+    }
+  }
+
+  @override
+  Stream<List<OrderModel>> watchAllOrders() {
+    return Stream.value(List<OrderModel>.from(orders));
+  }
+
+  String? lastUpdatedOrderId;
+  String? lastUpdatedStatus;
+
+  @override
+  Future<void> updateOrderStatus({
+    required String orderId,
+    required String status,
+  }) async {
+    lastUpdatedOrderId = orderId;
+    lastUpdatedStatus = status;
+    final index = orders.indexWhere((o) => o.id == orderId);
+    if (index != -1) {
+      final old = orders[index];
+      orders[index] = OrderModel(
+        id: old.id,
+        orderNumber: old.orderNumber,
+        representative: old.representative,
+        doctor: old.doctor,
+        chemist: old.chemist,
+        items: old.items,
+        totalItems: old.totalItems,
+        totalQuantity: old.totalQuantity,
+        totalAmount: old.totalAmount,
+        status: status,
+        createdAt: old.createdAt,
+        updatedAt: DateTime.now(),
+      );
+    }
+  }
+}
+
+class _MockUserWithUid extends Fake implements User {
+  final String _uid;
+  _MockUserWithUid(this._uid);
+
+  @override
+  String get uid => _uid;
+
+  @override
+  String? get email => 'test@med.com';
 }
 
 class _MockUser extends Fake implements User {
@@ -2091,3 +4180,4 @@ class _MockUser extends Fake implements User {
   @override
   String? get email => 'test@med.com';
 }
+
