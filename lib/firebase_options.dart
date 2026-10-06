@@ -17,19 +17,13 @@ import 'package:flutter/foundation.dart'
 class DefaultFirebaseOptions {
   static FirebaseOptions get currentPlatform {
     if (kIsWeb) {
-      throw UnsupportedError(
-        'DefaultFirebaseOptions have not been configured for web - '
-        'you can reconfigure this by running the FlutterFire CLI again.',
-      );
+      return web;
     }
     switch (defaultTargetPlatform) {
       case TargetPlatform.android:
         return android;
       case TargetPlatform.iOS:
-        throw UnsupportedError(
-          'DefaultFirebaseOptions have not been configured for ios - '
-          'you can reconfigure this by running the FlutterFire CLI again.',
-        );
+        return ios;
       case TargetPlatform.macOS:
         throw UnsupportedError(
           'DefaultFirebaseOptions have not been configured for macos - '
@@ -52,11 +46,30 @@ class DefaultFirebaseOptions {
     }
   }
 
+  static const FirebaseOptions web = FirebaseOptions(
+    apiKey: 'AIzaSyAwT-nrm2zqPUMPZLUDHoT7qZ3x0qAKBV4',
+    appId: '1:737325074723:web:6277026b7a513a2ae76496',
+    messagingSenderId: '737325074723',
+    projectId: 'medical-order-management',
+    authDomain: 'medical-order-management.firebaseapp.com',
+    storageBucket: 'medical-order-management.firebasestorage.app',
+    measurementId: 'G-S82Y8NDLDP',
+  );
+
   static const FirebaseOptions android = FirebaseOptions(
     apiKey: 'AIzaSyDgxq41lQ15Kl5Qx6F76yW64_Yjrz0ZN-c',
     appId: '1:737325074723:android:3a087b3bf680bda5e76496',
     messagingSenderId: '737325074723',
     projectId: 'medical-order-management',
     storageBucket: 'medical-order-management.firebasestorage.app',
+  );
+
+  static const FirebaseOptions ios = FirebaseOptions(
+    apiKey: 'AIzaSyB7DDDIamVjLHd3rsgB7vtLEOw9iU7XTPA',
+    appId: '1:737325074723:ios:007aab46dd0afef2e76496',
+    messagingSenderId: '737325074723',
+    projectId: 'medical-order-management',
+    storageBucket: 'medical-order-management.firebasestorage.app',
+    iosBundleId: 'com.medicalorder.medicalOrderManagement',
   );
 }

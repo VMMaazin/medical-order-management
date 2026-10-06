@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../models/medicine.dart';
 import '../../../providers/medicine_provider.dart';
+import '../../../services/medicine_catalog_importer.dart';
 import 'add_medicine_screen.dart';
 import 'medicine_details_screen.dart';
 
@@ -15,6 +16,144 @@ class MedicinesScreen extends ConsumerStatefulWidget {
 
 class _MedicinesScreenState extends ConsumerState<MedicinesScreen> {
   final _searchController = TextEditingController();
+  bool _isImporting = false;
+  String _importProgressText = '';
+
+  Future<void> _handleImportCatalog() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogCtx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Row(
+          children: [
+            Icon(Icons.cloud_download_outlined, color: Color(0xFF0D9488)),
+            SizedBox(width: 8),
+            Text('Import 165 Medicines?'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'This will add all 165 official medicines and variants from the catalogue with their therapeutic categories, dosage forms, strengths, pack sizes, MRPs, and PTRs.',
+              style: TextStyle(fontSize: 14),
+            ),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFF0D9488).withAlpha(15),
+                borderRadius: BorderRadius.circular(8),
+                border:
+                    Border.all(color: const Color(0xFF0D9488).withAlpha(50)),
+              ),
+              child: const Row(
+                children: [
+                  Icon(Icons.info_outline, size: 18, color: Color(0xFF0D9488)),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Medicines that already exist in your database will be automatically skipped.',
+                      style: TextStyle(fontSize: 12, color: Color(0xFF0F766E)),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogCtx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF0D9488),
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.of(dialogCtx).pop(true),
+            child: const Text('Import Catalog'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    setState(() {
+      _isImporting = true;
+      _importProgressText = 'Importing catalog...';
+    });
+
+    try {
+      final importer = MedicineCatalogImporter();
+      final result = await importer.importCatalog(
+        onProgress: (progress, name) {
+          if (mounted) {
+            setState(() {
+              _importProgressText =
+                  'Importing: $name (${(progress * 100).toInt()}%)';
+            });
+          }
+        },
+      );
+
+      if (!mounted) return;
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Row(
+            children: [
+              Icon(Icons.check_circle_outline, color: Color(0xFF10B981)),
+              SizedBox(width: 8),
+              Text('Import Complete'),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('• Medicines Added: ${result.medicinesAdded}'),
+              Text('• Packaging Variants Added: ${result.variantsAdded}'),
+              if (result.skippedAlreadyExist > 0)
+                Text(
+                    '• Skipped (Already Exists): ${result.skippedAlreadyExist}'),
+              const SizedBox(height: 8),
+              const Text(
+                'All medicines and variants have been organized and are ready for ordering.',
+                style: TextStyle(fontSize: 12, color: Colors.grey),
+              ),
+            ],
+          ),
+          actions: [
+            ElevatedButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('Done'),
+            ),
+          ],
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to import catalog: $e'),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isImporting = false;
+          _importProgressText = '';
+        });
+      }
+    }
+  }
 
   @override
   void dispose() {
@@ -33,6 +172,20 @@ class _MedicinesScreenState extends ConsumerState<MedicinesScreen> {
         title: const Text('Medicines'),
         centerTitle: false,
         actions: [
+          IconButton(
+            tooltip: 'Import 165 Catalog Medicines',
+            icon: _isImporting
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Color(0xFF0D9488),
+                    ),
+                  )
+                : const Icon(Icons.cloud_download_outlined),
+            onPressed: _isImporting ? null : _handleImportCatalog,
+          ),
           IconButton(
             tooltip: showInactive ? 'Hide Inactive' : 'Show Inactive',
             icon: Icon(
@@ -58,6 +211,41 @@ class _MedicinesScreenState extends ConsumerState<MedicinesScreen> {
       body: SafeArea(
         child: Column(
           children: [
+            if (_isImporting) ...[
+              Container(
+                width: double.infinity,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                color: const Color(0xFF0D9488).withAlpha(25),
+                child: Row(
+                  children: [
+                    const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Color(0xFF0D9488),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        _importProgressText,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: Color(0xFF0F766E),
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const LinearProgressIndicator(
+                backgroundColor: Colors.transparent,
+                color: Color(0xFF0D9488),
+              ),
+            ],
             // Search & Filter Header
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
@@ -186,17 +374,36 @@ class _MedicinesScreenState extends ConsumerState<MedicinesScreen> {
                             ),
                             if (!isFiltering) ...[
                               const SizedBox(height: 20),
-                              ElevatedButton.icon(
-                                onPressed: () {
-                                  Navigator.of(context).push(
-                                    MaterialPageRoute(
-                                      builder: (_) =>
-                                          const AddMedicineScreen(),
+                              Wrap(
+                                spacing: 12,
+                                runSpacing: 10,
+                                alignment: WrapAlignment.center,
+                                children: [
+                                  ElevatedButton.icon(
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: const Color(0xFF0D9488),
+                                      foregroundColor: Colors.white,
                                     ),
-                                  );
-                                },
-                                icon: const Icon(Icons.add),
-                                label: const Text('Add Medicine'),
+                                    onPressed: _isImporting
+                                        ? null
+                                        : _handleImportCatalog,
+                                    icon: const Icon(Icons.cloud_download),
+                                    label: const Text(
+                                        'Import Catalog (165 Medicines)'),
+                                  ),
+                                  OutlinedButton.icon(
+                                    onPressed: () {
+                                      Navigator.of(context).push(
+                                        MaterialPageRoute(
+                                          builder: (_) =>
+                                              const AddMedicineScreen(),
+                                        ),
+                                      );
+                                    },
+                                    icon: const Icon(Icons.add),
+                                    label: const Text('Add Medicine'),
+                                  ),
+                                ],
                               ),
                             ],
                           ],

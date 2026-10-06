@@ -280,6 +280,103 @@ class _AdminOrderDetailsScreenState
     }
   }
 
+  Future<void> _confirmDeleteOrder(OrderModel order) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogCtx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Row(
+          children: [
+            Icon(Icons.delete_forever_rounded, color: Colors.redAccent),
+            SizedBox(width: 8),
+            Text('Delete Order?'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Are you sure you want to permanently delete order ${order.orderNumber}?',
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.red.withAlpha(15),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.red.withAlpha(50)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('• Amount: ₹${order.totalAmount.toStringAsFixed(2)}'),
+                  Text('• Doctor: ${order.doctorName}'),
+                  Text('• Chemist: ${order.chemistName}'),
+                  const SizedBox(height: 6),
+                  const Text(
+                    'The order amount will be automatically subtracted from all reports and revenue statistics.',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.redAccent,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogCtx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.redAccent,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.of(dialogCtx).pop(true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+    if (!mounted) return;
+
+    setState(() {
+      _isUpdating = true;
+    });
+
+    try {
+      final orderService = ref.read(orderServiceProvider);
+      await orderService.deleteOrder(order.id);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Order ${order.orderNumber} deleted successfully'),
+          backgroundColor: Colors.red.shade700,
+        ),
+      );
+      Navigator.of(context).pop();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isUpdating = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to delete order: $e'),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -291,7 +388,14 @@ class _AdminOrderDetailsScreenState
         title: const Text('Admin Order Details'),
         centerTitle: false,
         actions: [
-          if (resolvedOrder != null)
+          if (resolvedOrder != null) ...[
+            IconButton(
+              icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
+              tooltip: 'Delete Order',
+              onPressed: _isUpdating
+                  ? null
+                  : () => _confirmDeleteOrder(resolvedOrder),
+            ),
             IconButton(
               icon: _isGeneratingPdf
                   ? const SizedBox(
@@ -304,6 +408,7 @@ class _AdminOrderDetailsScreenState
               onPressed:
                   _isGeneratingPdf ? null : () => _generatePdf(resolvedOrder),
             ),
+          ],
         ],
       ),
       body: orderStream.when(
@@ -452,6 +557,39 @@ class _AdminOrderDetailsScreenState
                             style: ElevatedButton.styleFrom(
                               backgroundColor: const Color(0xFF0D9488),
                               foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        // Delete Order Button
+                        SizedBox(
+                          width: double.infinity,
+                          child: OutlinedButton.icon(
+                            onPressed: _isUpdating
+                                ? null
+                                : () => _confirmDeleteOrder(
+                                      displayOrder,
+                                    ),
+                            icon: const Icon(
+                              Icons.delete_outline,
+                              size: 18,
+                              color: Colors.redAccent,
+                            ),
+                            label: const Text(
+                              'Delete Order',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: Colors.redAccent,
+                              ),
+                            ),
+                            style: OutlinedButton.styleFrom(
+                              side: BorderSide(
+                                color: Colors.redAccent.withAlpha(140),
+                              ),
                               padding: const EdgeInsets.symmetric(vertical: 12),
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(10),

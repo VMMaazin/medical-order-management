@@ -72,7 +72,7 @@ service cloud.firestore {
                     && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt'])
                     && request.resource.data.status in ['pending', 'confirmed', 'processing', 'delivered', 'cancelled'];
 
-      allow delete: if false;
+      allow delete: if isAdmin();
     }
   }
 }

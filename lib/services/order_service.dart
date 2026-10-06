@@ -230,4 +230,13 @@ class OrderService {
       'updatedAt': FieldValue.serverTimestamp(),
     });
   }
+
+  /// Delete an order permanently (Admin only)
+  ///
+  /// Removes the order document from Firestore. Real-time streams and
+  /// statistics listeners automatically re-calculate totals and reports
+  /// without this order's value.
+  Future<void> deleteOrder(String orderId) async {
+    await _ordersCollection.doc(orderId).delete();
+  }
 }

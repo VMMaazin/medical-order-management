@@ -75,6 +75,95 @@ class _AdminOrdersScreenState extends ConsumerState<AdminOrdersScreen> {
     );
   }
 
+  Future<void> _confirmDeleteOrder(OrderModel order) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogCtx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Row(
+          children: [
+            Icon(Icons.delete_forever_rounded, color: Colors.redAccent),
+            SizedBox(width: 8),
+            Text('Delete Order?'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Are you sure you want to permanently delete order ${order.orderNumber}?',
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.red.withAlpha(15),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.red.withAlpha(50)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('• Amount: ₹${order.totalAmount.toStringAsFixed(2)}'),
+                  Text('• Doctor: ${order.doctorName}'),
+                  Text('• Chemist: ${order.chemistName}'),
+                  const SizedBox(height: 6),
+                  const Text(
+                    'The order amount will be automatically subtracted from all reports and revenue statistics.',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.redAccent,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogCtx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.redAccent,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.of(dialogCtx).pop(true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+    if (!mounted) return;
+
+    try {
+      final orderService = ref.read(orderServiceProvider);
+      await orderService.deleteOrder(order.id);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Order ${order.orderNumber} deleted successfully'),
+          backgroundColor: Colors.red.shade700,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to delete order: $e'),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -341,27 +430,46 @@ class _AdminOrdersScreenState extends ConsumerState<AdminOrdersScreen> {
                                         color: Color(0xFF0F766E),
                                       ),
                                     ),
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 8,
-                                        vertical: 3,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: statusColor.withAlpha(25),
-                                        borderRadius:
-                                            BorderRadius.circular(6),
-                                        border: Border.all(
-                                          color: statusColor.withAlpha(90),
+                                    Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 8,
+                                            vertical: 3,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: statusColor.withAlpha(25),
+                                            borderRadius:
+                                                BorderRadius.circular(6),
+                                            border: Border.all(
+                                              color: statusColor.withAlpha(90),
+                                            ),
+                                          ),
+                                          child: Text(
+                                            order.status.toUpperCase(),
+                                            style: TextStyle(
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.bold,
+                                              color: statusColor,
+                                            ),
+                                          ),
                                         ),
-                                      ),
-                                      child: Text(
-                                        order.status.toUpperCase(),
-                                        style: TextStyle(
-                                          fontSize: 11,
-                                          fontWeight: FontWeight.bold,
-                                          color: statusColor,
+                                        const SizedBox(width: 6),
+                                        IconButton(
+                                          icon: const Icon(
+                                            Icons.delete_outline,
+                                            size: 19,
+                                            color: Colors.redAccent,
+                                          ),
+                                          tooltip: 'Delete Order',
+                                          visualDensity: VisualDensity.compact,
+                                          padding: EdgeInsets.zero,
+                                          constraints: const BoxConstraints(),
+                                          onPressed: () =>
+                                              _confirmDeleteOrder(order),
                                         ),
-                                      ),
+                                      ],
                                     ),
                                   ],
                                 ),
